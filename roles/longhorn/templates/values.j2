@@ -72,3 +72,50 @@ persistence:
     selector: "{{ longhorn_vars.kubernetes.default_settings.volume.replica_node_tag }}"
 {% endif %}
   migratable: true
+# -- CSI sidecar anti-affinity: spread replicas across nodes so a single
+# node failure doesn't take down all provisioners/attachers/snapshotters/resizers.
+# Deployment names (csi-provisioner, csi-attacher, ...) are hardcoded by the
+# Longhorn chart and cannot be renamed via values — but they're distinguishable
+# by service account (longhorn-service-account) and socket path
+# (/var/lib/kubelet/plugins/driver.longhorn.io/).
+csi:
+  attacher:
+    affinity:
+      podAntiAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  app: csi-attacher
+              topologyKey: kubernetes.io/hostname
+  provisioner:
+    affinity:
+      podAntiAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  app: csi-provisioner
+              topologyKey: kubernetes.io/hostname
+  resizer:
+    affinity:
+      podAntiAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  app: csi-resizer
+              topologyKey: kubernetes.io/hostname
+  snapshotter:
+    affinity:
+      podAntiAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  app: csi-snapshotter
+              topologyKey: kubernetes.io/hostname
