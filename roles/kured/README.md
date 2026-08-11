@@ -22,7 +22,7 @@ See the related role variables listed below, defined into [main.yaml](./defaults
 | kured_vars.kubernetes.configuration.slack.messages.enabled | bool | `false` |  |
 | kured_vars.kubernetes.configuration.slack.messages.reboot | string | `""` |  |
 | kured_vars.kubernetes.configuration.slack.messages.uncordon | string | `""` |  |
-| kured_vars.kubernetes.configuration.slack.notify_url | string | Set value into [all.yaml](../../inventory/cluster/group_vars/all.yaml) `credentials` collection | Slack notifications, see [documentation](https://kured.dev/docs/configuration/#notifications) for details |
+| kured_vars.kubernetes.configuration.slack.notify_url | string | Set value into [all.yaml](../../inventory/cluster/group_vars/all/main.yaml) `credentials` collection | Slack notifications, see [documentation](https://kured.dev/docs/configuration/#notifications) for details |
 | kured_vars.kubernetes.configuration.time.end | string | `"08:00"` |  |
 | kured_vars.kubernetes.configuration.time.start | string | `"04:00"` |  |
 | kured_vars.kubernetes.configuration.time.zone | string | `"UTC"` |  |

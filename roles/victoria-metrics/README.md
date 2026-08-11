@@ -60,8 +60,8 @@ See the related role variables listed below, defined into [main.yaml](./defaults
 | victoriametrics_vars.kubernetes.grafana.storage.class | string | `"longhorn"` |  |
 | victoriametrics_vars.kubernetes.grafana.storage.enabled | bool | `true` |  |
 | victoriametrics_vars.kubernetes.grafana.storage.size | string | `"5Gi"` |  |
-| victoriametrics_vars.kubernetes.grafana.user.name | string | Set value into [all.yaml](../../inventory/cluster/group_vars/all.yaml) `credentials` collection | User name used to access Grafana UI |
-| victoriametrics_vars.kubernetes.grafana.user.password | string | Set value into [all.yaml](../../inventory/cluster/group_vars/all.yaml) `credentials` collection | User password used to access Grafana UI |
+| victoriametrics_vars.kubernetes.grafana.user.name | string | Set value into [all.yaml](../../inventory/cluster/group_vars/all/main.yaml) `credentials` collection | User name used to access Grafana UI |
+| victoriametrics_vars.kubernetes.grafana.user.password | string | Set value into [all.yaml](../../inventory/cluster/group_vars/all/main.yaml) `credentials` collection | User password used to access Grafana UI |
 | victoriametrics_vars.kubernetes.helm.chart.operator.name | string | `"victoria-metrics-operator"` |  |
 | victoriametrics_vars.kubernetes.helm.chart.prometheus.name | string | `"prometheus-operator-crds"` |  |
 | victoriametrics_vars.kubernetes.helm.chart.prometheus.version | string | `"v28.0.1"` |  |

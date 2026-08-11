@@ -28,6 +28,7 @@ cgroup:
 ciliumEndpointSlice:
   enabled: true
 cni:
+  exclusive: {{ cilium_vars.kubernetes.cni.exclusive | lower }}
   resources:
     limits:
 {% if cilium_vars.kubernetes.cni.resources.limits.cpu is truthy %}
@@ -52,11 +53,14 @@ envoy:
 envoyConfig:
   enabled: true
 gatewayAPI:
-  enabled: true
+  enabled: {{ cilium_vars.kubernetes.gateway_api.enabled | lower }}
   enableAlpn: true
 ipam:
+  mode: {{ cilium_vars.kubernetes.ipam.mode }}
+{% if cilium_vars.kubernetes.ipam.mode == 'cluster-pool' %}
   operator:
     clusterPoolIPv4PodCIDRList: {{ cilium_vars.kubernetes.ipam.operator.cluster_pool | split(',') }}
+{% endif %}
 {% if cilium_vars.kubernetes.ip_masq_agent.enabled is truthy %}
 ipMasqAgent:
   config:
@@ -69,7 +73,7 @@ k8sClientRateLimit:
   qps: {{ cilium_vars.kubernetes.client.rate_limit.qps }}
 k8sServiceHost: {{ k3s_vars.cluster.service.host }}
 k8sServicePort: {{ k3s_vars.cluster.service.port }}
-kubeProxyReplacement: true
+kubeProxyReplacement: {{ cilium_vars.kubernetes.kube_proxy.replacement | lower }}
 kubeProxyReplacementHealthzBindAddr: '{{ cilium_vars.kubernetes.kube_proxy.bind.address }}:{{ cilium_vars.kubernetes.kube_proxy.bind.port }}'
 logOptions:
   level: {{ cilium_vars.kubernetes.log_options.level }}
@@ -221,14 +225,18 @@ prometheus:
     namespace: {{ victoriametrics_vars.kubernetes.namespace }}
 {% endif %}
 {% else %}
+{% if cilium_vars.kubernetes.routing.mode == 'native' %}
 autoDirectNodeRoutes: true
 directRoutingSkipUnreachable: true
+{% endif %}
 ingressController:
   enabled: true
   loadbalancerMode: {{ cilium_vars.kubernetes.ingress_controller.loadbalancer.mode }}
   service:
     loadBalancerIP: {{ cilium_vars.kubernetes.ingress_controller.service.ip }}
+{% if cilium_vars.kubernetes.routing.mode == 'native' and cilium_vars.kubernetes.ipam.mode == 'cluster-pool' %}
 ipv4NativeRoutingCIDR: {{ cilium_vars.kubernetes.ipam.operator.cluster_pool }}
+{% endif %}
 l2announcements:
   enabled: true
   leaseDuration: 15s
@@ -246,5 +254,8 @@ maglev:
   hashSeed: "{{ lookup('ansible.builtin.password', '/dev/null', chars=['ascii_letters', 'digits'], length=16) }}"
   tableSize: {{ cilium_vars.kubernetes.loadbalancer.table_size }}
 {% endif %}
-routingMode: native
+routingMode: {{ cilium_vars.kubernetes.routing.mode }}
+{% if cilium_vars.kubernetes.routing.mode == 'tunnel' %}
+tunnelProtocol: {{ cilium_vars.kubernetes.routing.tunnel_protocol }}
+{% endif %}
 {% endif %}

@@ -20,7 +20,7 @@
             prometheus.io/port: 8080
             prometheus.io/scrape: 'true'
           monitor:
-            enabled: true
+            enabled: "{{ defaults.cluster.service_monitor_enabled }}"
             scrape:
               # If `null`, default value is `victoriametrics_map.service.monitor.scrape.interval`
               interval: null

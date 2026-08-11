@@ -2,18 +2,12 @@
 cilium_vars:
   kubernetes:
     agent:
-      resources:
-        limits:
-          cpu: null
-          memory: 256Mi
-        requests:
-          cpu: 10m
-          memory: 256Mi
+      resources: '{{ defaults.cluster.pod_resources.medium }}'
     bpf:
       clock_probe: true
-      datapath_mode: netkit
+      datapath_mode: '{{ cilium_datapath_mode | default(defaults.cilium.datapath_mode) }}'
       external_access: false
-      masquerade: true
+      masquerade: '{{ cilium_bpf_masquerade | default(defaults.cilium.bpf_masquerade) }}'
       monitor:
         # -- Available options are `none`, `low`, `medium` and `maximum`
         aggregation: maximum
@@ -27,39 +21,24 @@ cilium_vars:
         - 1
         - 4
     cgroup:
-      resources:
-        limits:
-          cpu: null
-          memory: 128Mi
-        requests:
-          cpu: 10m
-          memory: 128Mi
+      resources: '{{ defaults.cluster.pod_resources.small }}'
     client:
       rate_limit:
         burst: 100
         qps: 50
+    # -- CNI config exclusivity. true = rename other CNI configs to *.cilium_bak.
+    # When Multus is enabled, this should be false to preserve 00-multus.conf.
     cni:
-      resources:
-        limits:
-          cpu: null
-          memory: 128Mi
-        requests:
-          cpu: 10m
-          memory: 128Mi
+      exclusive: '{{ cilium_cni_exclusive | default(defaults.cilium.cni_exclusive) }}'
+      resources: '{{ defaults.cluster.pod_resources.small }}'
     dashboards:
       enabled: true
     envoy:
-      resources:
-        limits:
-          cpu: null
-          memory: 128Mi
-        requests:
-          cpu: 10m
-          memory: 128Mi
+      resources: '{{ defaults.cluster.pod_resources.small }}'
     helm:
       chart:
         name: cilium
-        version: v1.19.3
+        version: '{{ cilium_chart_version | default("v1.19.3") }}'
       repository:
         name: cilium
         org: cilium
@@ -75,35 +54,17 @@ cilium_vars:
         - tcp
       relay:
         # -- See [documentation](https://docs.cilium.io/en/stable/observability/hubble/setup/), for details
-        enabled: true
+        enabled: '{{ cilium_hubble_relay_enabled | default(defaults.cilium.hubble_relay_enabled) }}'
         replicas: 1
-        resources:
-          limits:
-            cpu: null
-            memory: 128Mi
-          requests:
-            cpu: 10m
-            memory: 128Mi
+        resources: '{{ defaults.cluster.pod_resources.small }}'
         retry_timeout: 10s
       ui:
         # -- See [documentation](https://docs.cilium.io/en/stable/observability/hubble/setup/), for details
-        enabled: true
+        enabled: '{{ cilium_hubble_ui_enabled | default(defaults.cilium.hubble_ui_enabled) }}'
         backend:
-          resources:
-            limits:
-              cpu: null
-              memory: 128Mi
-            requests:
-              cpu: 10m
-              memory: 128Mi
+          resources: '{{ defaults.cluster.pod_resources.small }}'
         frontend:
-          resources:
-            limits:
-              cpu: null
-              memory: 128Mi
-            requests:
-              cpu: 10m
-              memory: 128Mi
+          resources: '{{ defaults.cluster.pod_resources.small }}'
         gateway:
           service: hubble-ui
           # -- See [documentation](https://axivo.com/k3s-cluster/tutorials/handbook/externaldns/#front-ends), for details
@@ -120,62 +81,70 @@ cilium_vars:
         mode: shared
       service:
         # -- Assign the `CiliumLoadBalancerIPPool` blocks start address
-        ip: 192.168.4.20
+        ip: '{{ cilium_lb_ip_start | default(defaults.cilium.lb_ip_start) }}'
     ip_masq_agent:
-      enabled: false
-      non_masquerade_cidrs:
-        - 10.0.0.0/8
-        - 192.168.0.0/16
+      enabled: '{{ cilium_ip_masq_agent_enabled | default(defaults.cilium.ip_masq_agent_enabled) }}'
+      # -- CIDRs that should NOT be masqueraded (Pod → these keeps Pod IP).
+      # Only Pod CIDR + Service CIDR — everything else (including node IPs)
+      # gets masqueraded to node IP. On cloud environments (OpenStack, AWS),
+      # this is required so Pod → node-IP traffic doesn't leak Pod IPs.
+      non_masquerade_cidrs: '{{ cilium_non_masquerade_cidrs | default(["10.42.0.0/16", "10.43.0.0/16"]) }}'
     ipam:
+      # -- IP allocation mode. Valid: cluster-pool | kubernetes | multi-pool
+      mode: '{{ cilium_ipam_mode | default(defaults.cilium.ipam_mode) }}'
       operator:
-        cluster_pool: 10.42.0.0/16
+        cluster_pool: '{{ cilium_ipam_cluster_pool | default(defaults.cilium.ipam_cluster_pool) }}'
     kube_proxy:
       bind:
         address: 0.0.0.0
         port: 10256
+      # -- Replace kube-proxy with Cilium eBPF service handling.
+      replacement: '{{ cilium_kube_proxy_replacement | default(defaults.cilium.kube_proxy_replacement) }}'
     loadbalancer:
       algorithm: maglev
       ip_pool:
         blocks:
           # -- `CiliumLoadBalancerIPPool` blocks start address
-          start: 192.168.4.20
+          start: '{{ cilium_lb_ip_start | default(defaults.cilium.lb_ip_start) }}'
           # -- `CiliumLoadBalancerIPPool` blocks stop address
-          stop: 192.168.4.100
+          stop: '{{ cilium_lb_ip_stop | default(defaults.cilium.lb_ip_stop) }}'
         name: cilium-ip-pool
       l2_announcement_policy:
         name: cilium-l2-announcement-policy
       table_size: 16381
     log_options:
       # -- Available options are `INFO`, `WARNING`, `ERROR` and `FATAL`
-      level: WARNING
+      level: '{{ cilium_log_level | default(defaults.cilium.log_level) }}'
     namespace: kube-system
+    # -- Pod-to-pod routing. Valid: native | tunnel
+    routing:
+      mode: '{{ cilium_routing_mode | default(defaults.cilium.routing_mode) }}'
+      # -- Tunnel protocol (only used when routing.mode = tunnel). Valid: vxlan | geneve
+      tunnel_protocol: '{{ cilium_tunnel_protocol | default(defaults.cilium.tunnel_protocol) }}'
+    # -- Cilium Gateway API controller.
+    gateway_api:
+      enabled: '{{ cilium_gateway_api_enabled | default(defaults.cilium.gateway_api_enabled) }}'
     operator:
-      resources:
-        limits:
-          cpu: null
-          memory: 128Mi
-        requests:
-          cpu: 10m
-          memory: 128Mi
+      resources: '{{ defaults.cluster.pod_resources.small }}'
   release:
     cli:
       # -- See [documentation](https://axivo.com/k3s-cluster/tutorials/handbook/server/#hardware), for details
-      file: cilium-linux-arm64.tar.gz
+      file: 'cilium-linux-{{ defaults.cluster.architecture_binary | default("amd64") }}.tar.gz'
       repository:
         name: cilium-cli
         org: cilium
-      version: v0.19.2
+      version: '{{ cilium_cli_version | default("v0.19.2") }}'
     gateway_api:
       # -- See [documentation](https://docs.cilium.io/en/stable/network/servicemesh/gateway-api/gateway-api/), for details
       file: experimental-install.yaml
       repository:
         name: gateway-api
         org: kubernetes-sigs
-      version: v1.5.1
+      version: '{{ cilium_gateway_api_version | default("v1.5.1") }}'
     hubble:
       # -- See [documentation](https://axivo.com/k3s-cluster/tutorials/handbook/server/#hardware), for details
-      file: hubble-linux-arm64.tar.gz
+      file: 'hubble-linux-{{ defaults.cluster.architecture_binary | default("amd64") }}.tar.gz'
       repository:
         name: hubble
         org: cilium
-      version: v1.18.6
+      version: '{{ cilium_hubble_cli_version | default("v1.18.6") }}'

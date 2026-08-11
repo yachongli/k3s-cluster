@@ -4,7 +4,7 @@ coredns_vars:
     helm:
       chart:
         name: coredns
-        version: v1.45.2
+        version: '{{ coredns_chart_version | default("v1.45.2") }}'
       repository:
         name: helm
         org: coredns
@@ -12,8 +12,8 @@ coredns_vars:
     hpa:
       # -- If `false`, `replicas` value is set from `min_replicas` value
       enabled: true
-      min_replicas: 1
-      max_replicas: 3
+      min_replicas: '{{ coredns_hpa_min_replicas | default(defaults.coredns.hpa_min_replicas) }}'
+      max_replicas: '{{ coredns_hpa_max_replicas | default(defaults.coredns.hpa_max_replicas) }}'
       resource:
         name: memory
         target:
@@ -23,10 +23,4 @@ coredns_vars:
       # -- Legacy deployment, using `kube-dns` label selectors
       legacy: false
     namespace: kube-system
-    resources:
-      limits:
-        cpu: null
-        memory: 128Mi
-      requests:
-        cpu: 10m
-        memory: 128Mi
+    resources: '{{ defaults.cluster.pod_resources.small }}'

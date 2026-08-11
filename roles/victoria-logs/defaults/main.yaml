@@ -1,11 +1,18 @@
 ---
 victorialogs_vars:
   kubernetes:
+    # -- Pin the stateful vlsingle server Pod to a subset of nodes. Empty
+    # maps/lists mean "no constraint". Overridable via globals.yaml:
+    #   victoria_logs_node_selector: {workload: storage}
+    #   victoria_logs_tolerations: [{key: dedicated, value: storage, effect: NoSchedule}]
+    pin:
+      node_selector: '{{ victoria_logs_node_selector | default(defaults.victoria_logs.node_selector) }}'
+      tolerations: '{{ victoria_logs_tolerations | default(defaults.victoria_logs.tolerations) }}'
     helm:
       chart:
         alias: vls
         name: victoria-logs-single
-        version: v0.12.0
+        version: '{{ victoria_logs_chart_version | default("v0.12.0") }}'
       repository:
         name: helm-charts
         org: VictoriaMetrics
@@ -17,21 +24,15 @@ victorialogs_vars:
         # -- See [documentation](https://axivo.com/k3s-cluster/tutorials/handbook/externaldns/#front-ends), for details
         subdomain: logs
       log_level: WARN
-      resources:
-        limits:
-          cpu: null
-          memory: 256Mi
-        requests:
-          cpu: 10m
-          memory: 256Mi
+      resources: '{{ defaults.cluster.pod_resources.medium }}'
       storage:
         enabled: true
         access_modes:
           - ReadWriteOnce
-        class: longhorn
-        size: 5Gi
+        class: '{{ victoria_logs_storage_class | default(defaults.victoria_logs.storage_class) }}'
+        size: '{{ victoria_logs_storage_size | default(defaults.victoria_logs.storage_size) }}'
       replicas: 1
-      retention_period: 7d
+      retention_period: '{{ victoria_logs_retention | default(defaults.victoria_logs.retention) }}'
     vector:
       enabled: true
       autoscaling:
@@ -44,10 +45,4 @@ victorialogs_vars:
             cpu: null
             memory: 80
       log_level: warn
-      resources:
-        limits:
-          cpu: null
-          memory: 128Mi
-        requests:
-          cpu: 10m
-          memory: 128Mi
+      resources: '{{ defaults.cluster.pod_resources.small }}'

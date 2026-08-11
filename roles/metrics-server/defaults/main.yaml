@@ -4,20 +4,14 @@ metricsserver_vars:
     helm:
       chart:
         name: metrics-server
-        version: v3.13.0
+        version: '{{ metrics_server_chart_version | default("v3.13.0") }}'
       repository:
         name: metrics-server
         org: kubernetes-sigs
         url: https://kubernetes-sigs.github.io
     namespace: kube-system
     replicas: 1
-    resources:
-      limits:
-        cpu: null
-        memory: 128Mi
-      requests:
-        cpu: 10m
-        memory: 128Mi
+    resources: '{{ defaults.cluster.pod_resources.small }}'
     server:
       # -- Additional server arguments,
       # set log level [verbosity](https://google.github.io/glog/stable/logging/#verbose-logging)
@@ -25,4 +19,4 @@ metricsserver_vars:
         - --v=1
       tls:
         # -- Available options are `cert-manager`, `helm` and `metrics-server`
-        type: cert-manager
+        type: '{{ metrics_server_tls_type | default(defaults.metrics_server.tls_type) }}'

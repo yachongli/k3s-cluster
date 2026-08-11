@@ -49,6 +49,14 @@ alertmanager:
     podDisruptionBudget:
       maxUnavailable: 1
     rollingUpdateStrategy: RollingUpdate
+{% if victoriametrics_vars.kubernetes.pin.node_selector.keys() | length > 0 %}
+    nodeSelector:
+      {{ victoriametrics_vars.kubernetes.pin.node_selector | to_nice_yaml(indent=2) | trim | indent(6) }}
+{% endif %}
+{% if victoriametrics_vars.kubernetes.pin.tolerations | length > 0 %}
+    tolerations:
+      {{ victoriametrics_vars.kubernetes.pin.tolerations | to_nice_yaml(indent=2) | trim | indent(6) }}
+{% endif %}
     storage:
 {% if victoriametrics_vars.kubernetes.alertmanager.storage.enabled is truthy %}
       volumeClaimTemplate:
@@ -138,6 +146,14 @@ grafana:
         secretName: {{ externaldns_vars.cloudflare.prefix }}-{{ victoriametrics_map.ingress.grafana.name }}
 {% endif %}
   logLevel: {{ victoriametrics_vars.kubernetes.grafana.log_level }}
+{% if victoriametrics_vars.kubernetes.pin.node_selector.keys() | length > 0 %}
+  nodeSelector:
+    {{ victoriametrics_vars.kubernetes.pin.node_selector | to_nice_yaml(indent=2) | trim | indent(4) }}
+{% endif %}
+{% if victoriametrics_vars.kubernetes.pin.tolerations | length > 0 %}
+  tolerations:
+    {{ victoriametrics_vars.kubernetes.pin.tolerations | to_nice_yaml(indent=2) | trim | indent(4) }}
+{% endif %}
 {% if victoriametrics_vars.kubernetes.grafana.storage.enabled is truthy %}
   persistence:
     accessModes:
@@ -321,6 +337,14 @@ vmagent:
     livenessProbe:
       periodSeconds: {{ victoriametrics_map.service.monitor.scrape.interval[:-1] }}
     logLevel: {{ victoriametrics_vars.kubernetes.vmagent.log_level }}
+{% if victoriametrics_vars.kubernetes.pin.node_selector.keys() | length > 0 %}
+    nodeSelector:
+      {{ victoriametrics_vars.kubernetes.pin.node_selector | to_nice_yaml(indent=2) | trim | indent(6) }}
+{% endif %}
+{% if victoriametrics_vars.kubernetes.pin.tolerations | length > 0 %}
+    tolerations:
+      {{ victoriametrics_vars.kubernetes.pin.tolerations | to_nice_yaml(indent=2) | trim | indent(6) }}
+{% endif %}
     podDisruptionBudget:
       maxUnavailable: 1
     readinessProbe:
@@ -384,6 +408,14 @@ vmalert:
       external.url: https://{{ victoriametrics_map.ingress.vmalert.hostname }}
 {% endif %}
     logLevel: {{ victoriametrics_vars.kubernetes.vmalert.log_level }}
+{% if victoriametrics_vars.kubernetes.pin.node_selector.keys() | length > 0 %}
+    nodeSelector:
+      {{ victoriametrics_vars.kubernetes.pin.node_selector | to_nice_yaml(indent=2) | trim | indent(6) }}
+{% endif %}
+{% if victoriametrics_vars.kubernetes.pin.tolerations | length > 0 %}
+    tolerations:
+      {{ victoriametrics_vars.kubernetes.pin.tolerations | to_nice_yaml(indent=2) | trim | indent(6) }}
+{% endif %}
     notifier:
       selector:
         labelSelector:
@@ -475,6 +507,14 @@ vmcluster:
       replicaCount: {{ victoriametrics_vars.kubernetes.vmcluster.vminsert.hpa.min_replicas }}
 {% endif %}
       logLevel: {{ victoriametrics_vars.kubernetes.vmcluster.vminsert.log_level }}
+{% if victoriametrics_vars.kubernetes.pin.node_selector.keys() | length > 0 %}
+      nodeSelector:
+        {{ victoriametrics_vars.kubernetes.pin.node_selector | to_nice_yaml(indent=2) | trim | indent(8) }}
+{% endif %}
+{% if victoriametrics_vars.kubernetes.pin.tolerations | length > 0 %}
+      tolerations:
+        {{ victoriametrics_vars.kubernetes.pin.tolerations | to_nice_yaml(indent=2) | trim | indent(8) }}
+{% endif %}
       podDisruptionBudget:
         maxUnavailable: 1
       resources:
@@ -516,6 +556,14 @@ vmcluster:
       replicaCount: {{ victoriametrics_vars.kubernetes.vmcluster.vmselect.hpa.min_replicas }}
 {% endif %}
       logLevel: {{ victoriametrics_vars.kubernetes.vmcluster.vmselect.log_level }}
+{% if victoriametrics_vars.kubernetes.pin.node_selector.keys() | length > 0 %}
+      nodeSelector:
+        {{ victoriametrics_vars.kubernetes.pin.node_selector | to_nice_yaml(indent=2) | trim | indent(8) }}
+{% endif %}
+{% if victoriametrics_vars.kubernetes.pin.tolerations | length > 0 %}
+      tolerations:
+        {{ victoriametrics_vars.kubernetes.pin.tolerations | to_nice_yaml(indent=2) | trim | indent(8) }}
+{% endif %}
       podDisruptionBudget:
         maxUnavailable: 1
       resources:
@@ -555,6 +603,14 @@ vmcluster:
         {{ victoriametrics_map.spec.vmcluster.vmstorage.extra_envs | to_nice_yaml(indent=2) | trim | indent(8) }}
 {% endif %}
       logLevel: {{ victoriametrics_vars.kubernetes.vmcluster.vmstorage.log_level }}
+{% if victoriametrics_vars.kubernetes.pin.node_selector.keys() | length > 0 %}
+      nodeSelector:
+        {{ victoriametrics_vars.kubernetes.pin.node_selector | to_nice_yaml(indent=2) | trim | indent(8) }}
+{% endif %}
+{% if victoriametrics_vars.kubernetes.pin.tolerations | length > 0 %}
+      tolerations:
+        {{ victoriametrics_vars.kubernetes.pin.tolerations | to_nice_yaml(indent=2) | trim | indent(8) }}
+{% endif %}
       podDisruptionBudget:
         maxUnavailable: 1
       replicaCount: {{ victoriametrics_vars.kubernetes.vmcluster.vmstorage.replicas }}
@@ -613,6 +669,14 @@ vmsingle:
 {% endif %}
     logLevel: {{ victoriametrics_vars.kubernetes.vmsingle.log_level }}
     replicaCount: {{ victoriametrics_vars.kubernetes.vmsingle.replicas }}
+{% if victoriametrics_vars.kubernetes.pin.node_selector.keys() | length > 0 %}
+    nodeSelector:
+      {{ victoriametrics_vars.kubernetes.pin.node_selector | to_nice_yaml(indent=2) | trim | indent(6) }}
+{% endif %}
+{% if victoriametrics_vars.kubernetes.pin.tolerations | length > 0 %}
+    tolerations:
+      {{ victoriametrics_vars.kubernetes.pin.tolerations | to_nice_yaml(indent=2) | trim | indent(6) }}
+{% endif %}
     resources:
       limits:
 {% if victoriametrics_vars.kubernetes.vmsingle.resources.limits.cpu is truthy %}

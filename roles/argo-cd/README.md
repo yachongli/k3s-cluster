@@ -91,9 +91,9 @@ See the related role variables listed below, defined into [main.yaml](./defaults
 | argocd_vars.kubernetes.server.autoscaling.min_replicas | int | `1` | Minimum number of replicas for autoscaling |
 | argocd_vars.kubernetes.server.autoscaling.target.utilization_percentage.cpu | string | `nil` | Target CPU utilization percentage for autoscaling, `null` for no limit |
 | argocd_vars.kubernetes.server.autoscaling.target.utilization_percentage.memory | int | `80` | Target memory utilization percentage for autoscaling |
-| argocd_vars.kubernetes.server.credentials.admin.password | string | Set value into [all.yaml](../../inventory/cluster/group_vars/all.yaml) `credentials` collection | ArgoCD UI admin password, set at global level |
-| argocd_vars.kubernetes.server.credentials.user.name | string | Set value into [all.yaml](../../inventory/cluster/group_vars/all.yaml) `credentials` collection | ArgoCD UI user name, set at global level |
-| argocd_vars.kubernetes.server.credentials.user.password | string | Set value into [all.yaml](../../inventory/cluster/group_vars/all.yaml) `credentials` collection | ArgoCD UI user password, set at global level |
+| argocd_vars.kubernetes.server.credentials.admin.password | string | Set value into [all.yaml](../../inventory/cluster/group_vars/all/main.yaml) `credentials` collection | ArgoCD UI admin password, set at global level |
+| argocd_vars.kubernetes.server.credentials.user.name | string | Set value into [all.yaml](../../inventory/cluster/group_vars/all/main.yaml) `credentials` collection | ArgoCD UI user name, set at global level |
+| argocd_vars.kubernetes.server.credentials.user.password | string | Set value into [all.yaml](../../inventory/cluster/group_vars/all/main.yaml) `credentials` collection | ArgoCD UI user password, set at global level |
 | argocd_vars.kubernetes.server.ingress.subdomain | object | `{"api":"argocd","grpc":"grpc.argocd"}` | See [documentation](https://axivo.com/k3s-cluster/tutorials/handbook/externaldns/#front-ends), for details |
 | argocd_vars.kubernetes.server.resources.limits.cpu | string | `nil` | CPU limit, `null` for no limit |
 | argocd_vars.kubernetes.server.resources.limits.memory | string | `"128Mi"` | Memory limit |

@@ -46,13 +46,6 @@
         remote_src: true
       loop: '{{ cilium_resources.release }}'
 
-    - name: Remove archive
-      ansible.builtin.file:
-        path: /tmp/{{ item.file }}
-        state: absent
-      loop: '{{ cilium_resources.release }}'
-      check_mode: false
-
     - name: Add repository
       kubernetes.core.helm_repository:
         name: '{{ cilium_vars.kubernetes.helm.repository.org }}'
@@ -154,6 +147,18 @@
           when:
             - cilium_secret.resources is iterable
             - cilium_secret.resources | length > 0
+
+        - name: Wait for Cilium CRDs to be registered
+          kubernetes.core.k8s_info:
+            kind: CustomResourceDefinition
+            name: ciliuml2announcementpolicies.cilium.io
+            kubeconfig: '{{ k3s_project.cluster.kubeconfig }}'
+            wait: true
+            wait_timeout: 60
+          register: cilium_crd
+          until: cilium_crd.resources | length > 0
+          retries: 6
+          delay: 5
 
         - name: Create l2 announcement policy
           kubernetes.core.k8s:

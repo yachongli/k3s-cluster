@@ -66,4 +66,9 @@ metrics:
 persistence:
   defaultClassReplicaCount: {{ longhorn_vars.kubernetes.default_settings.volume.replicas }}
   defaultDataLocality: {{ longhorn_vars.kubernetes.default_settings.data_locality }}
+{% if longhorn_vars.kubernetes.default_settings.volume.replica_node_tag | length > 0 %}
+  defaultNodeSelector:
+    enable: true
+    selector: "{{ longhorn_vars.kubernetes.default_settings.volume.replica_node_tag }}"
+{% endif %}
   migratable: true

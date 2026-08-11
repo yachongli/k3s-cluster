@@ -6,32 +6,26 @@ kured_vars:
       period: 15m
       reboot_delay: 60s
       slack:
-        enabled: true
+        enabled: '{{ kured_slack_enabled | default(defaults.kured.slack_enabled) }}'
         messages:
           enabled: false
           drain: ''
           reboot: ''
           uncordon: ''
         # -- (string) Slack notifications, see [documentation](https://kured.dev/docs/configuration/#notifications) for details
-        # @default -- Set value into [all.yaml](../../inventory/cluster/group_vars/all.yaml) `credentials` collection
+        # @default -- Set value into [all.yaml](../../inventory/cluster/group_vars/all/main.yaml) `credentials` collection
         notify_url:
       time:
-        start: '04:00'
-        end: '08:00'
-        zone: UTC
+        start: '{{ kured_reboot_start | default(defaults.kured.reboot_start) }}'
+        end: '{{ kured_reboot_end | default(defaults.kured.reboot_end) }}'
+        zone: '{{ kured_reboot_zone | default(defaults.kured.reboot_zone) }}'
     helm:
       chart:
         name: kured
-        version: v5.11.0
+        version: '{{ kured_chart_version | default("v5.11.0") }}'
       repository:
         name: charts
         org: kubereboot
         url: https://kubereboot.github.io
     namespace: kube-system
-    resources:
-      limits:
-        cpu: null
-        memory: 128Mi
-      requests:
-        cpu: 10m
-        memory: 128Mi
+    resources: '{{ defaults.cluster.pod_resources.small }}'

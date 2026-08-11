@@ -14,6 +14,7 @@ The roles are applied in this general order:
 6. Storage: `longhorn`
 7. Observability: `metrics-server` → `victoria-logs` → `victoria-metrics`
 8. Application Management: `argo-cd` → `kured`
+9. Virtualization: `kubevirt`
 
 ## Structure
 
@@ -308,3 +309,21 @@ The roles follow these common patterns:
   - Setting up sidecars for dashboard discovery
   - Managing replicas and high-availability configurations
   - Setting log levels for all components (WARN by default)
+
+## Virtualization Role
+
+### `kubevirt`
+- **Purpose**: Runs virtual machines alongside containers in Kubernetes
+- **Key Functions**:
+  - Installing KubeVirt operator and `KubeVirt` custom resource from upstream release manifests (no Helm chart)
+  - Installing `virtctl` CLI binary for VM lifecycle management
+  - Configuring developer feature gates (DownwardMetrics, ExpandDisks by default)
+  - Supporting software emulation (`useEmulation`) for hosts without hardware virtualization
+  - Configuring infra and workloads node placement with node selectors and tolerations
+  - Configuring network interface type (masquerade, bridge, slirp)
+  - Setting workload update strategy with live migration
+  - Applying upstream KubeVirt network policies for Cilium-enforced pod isolation
+  - Setting uninstall strategy to block removal when workloads exist
+  - Waiting for KubeVirt CRD establishment and resource availability
+  - Exposing metrics via Prometheus ServiceMonitor for VictoriaMetrics
+  - Proper teardown ordering on reset (CR first, then operator, then CRDs and namespace)

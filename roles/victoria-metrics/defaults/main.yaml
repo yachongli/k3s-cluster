@@ -1,6 +1,13 @@
 ---
 victoriametrics_vars:
   kubernetes:
+    # -- Pin all stateful VM Pods to a subset of nodes. Empty maps/lists mean
+    # "no constraint". Overridable via globals.yaml:
+    #   victoria_metrics_node_selector: {workload: storage}
+    #   victoria_metrics_tolerations: [{key: dedicated, value: storage, effect: NoSchedule}]
+    pin:
+      node_selector: '{{ victoria_metrics_node_selector | default(defaults.victoria_metrics.node_selector) }}'
+      tolerations: '{{ victoria_metrics_tolerations | default(defaults.victoria_metrics.tolerations) }}'
     alertmanager:
       config:
         route:
@@ -11,13 +18,7 @@ victoriametrics_vars:
           # -- Minimum interval between repeat notifications for unresolved alerts
           repeat_interval: 12h
       config_reloader:
-        resources:
-          limits:
-            cpu: null
-            memory: 128Mi
-          requests:
-            cpu: 10m
-            memory: 128Mi
+        resources: '{{ defaults.cluster.pod_resources.small }}'
       ingress:
         enabled: true
         # -- See [documentation](https://axivo.com/k3s-cluster/tutorials/handbook/externaldns/#front-ends), for details
@@ -25,32 +26,26 @@ victoriametrics_vars:
       log_level: WARN
       # -- Minimum accepted value is `2`
       replicas: 2
-      resources:
-        limits:
-          cpu: null
-          memory: 128Mi
-        requests:
-          cpu: 10m
-          memory: 128Mi
+      resources: '{{ defaults.cluster.pod_resources.small }}'
       storage:
         enabled: false
         access_modes:
           - ReadWriteOnce
-        class: longhorn
-        size: 5Gi
+        class: '{{ victoria_metrics_storage_class | default(defaults.victoria_metrics.storage_class) }}'
+        size: '{{ victoria_metrics_aux_storage_size | default(defaults.victoria_metrics.aux_storage_size) }}'
     default_dashboards:
       timezone: utc
     helm:
       chart:
         prometheus:
           name: prometheus-operator-crds
-          version: v28.0.1
+          version: '{{ victoria_metrics_prometheus_chart_version | default("v28.0.1") }}'
         operator:
           name: victoria-metrics-operator
         victoriametrics:
           alias: vmks
           name: victoria-metrics-k8s-stack
-          version: v0.74.1
+          version: '{{ victoria_metrics_chart_version | default("v0.74.1") }}'
       repository:
         grafana:
           name: helm-charts
@@ -75,119 +70,65 @@ victoriametrics_vars:
             - grafana-lokiexplore-app
       log_level: WARN
       replicas: 1
-      resources:
-        limits:
-          cpu: null
-          memory: 256Mi
-        requests:
-          cpu: 10m
-          memory: 256Mi
+      resources: '{{ defaults.cluster.pod_resources.medium }}'
       sidecar:
         log_level: WARN
-        resources:
-          limits:
-            cpu: null
-            memory: 128Mi
-          requests:
-            cpu: 10m
-            memory: 128Mi
+        resources: '{{ defaults.cluster.pod_resources.small }}'
       storage:
         enabled: true
         access_modes:
           - ReadWriteOnce
-        class: longhorn
-        size: 5Gi
+        class: '{{ victoria_metrics_storage_class | default(defaults.victoria_metrics.storage_class) }}'
+        size: '{{ victoria_metrics_aux_storage_size | default(defaults.victoria_metrics.aux_storage_size) }}'
       user:
         # -- (string) User name used to access Grafana UI
-        # @default -- Set value into [all.yaml](../../inventory/cluster/group_vars/all.yaml) `credentials` collection
+        # @default -- Set value into [all.yaml](../../inventory/cluster/group_vars/all/main.yaml) `credentials` collection
         name:
         # -- (string) User password used to access Grafana UI
-        # @default -- Set value into [all.yaml](../../inventory/cluster/group_vars/all.yaml) `credentials` collection
+        # @default -- Set value into [all.yaml](../../inventory/cluster/group_vars/all/main.yaml) `credentials` collection
         password:
     kube_state_metrics:
       replicas: 1
-      resources:
-        limits:
-          cpu: null
-          memory: 128Mi
-        requests:
-          cpu: 10m
-          memory: 128Mi
+      resources: '{{ defaults.cluster.pod_resources.small }}'
     namespace: kube-system
     victoria_metrics_operator:
       # -- Available options are `info` and `error`
       log_level: error
       replicas: 1
-      resources:
-        limits:
-          cpu: null
-          memory: 128Mi
-        requests:
-          cpu: 10m
-          memory: 128Mi
+      resources: '{{ defaults.cluster.pod_resources.small }}'
     prometheus_node_exporter:
-      resources:
-        limits:
-          cpu: null
-          memory: 128Mi
-        requests:
-          cpu: 10m
-          memory: 128Mi
+      resources: '{{ defaults.cluster.pod_resources.small }}'
     vmagent:
       config_reloader:
-        resources:
-          limits:
-            cpu: null
-            memory: 128Mi
-          requests:
-            cpu: 10m
-            memory: 128Mi
+        resources: '{{ defaults.cluster.pod_resources.small }}'
       ingress:
         enabled: true
         # -- See [documentation](https://axivo.com/k3s-cluster/tutorials/handbook/externaldns/#front-ends), for details
         subdomain: agent
       log_level: WARN
       replicas: 1
-      resources:
-        limits:
-          cpu: null
-          memory: 1024Mi
-        requests:
-          cpu: 10m
-          memory: 1024Mi
+      resources: '{{ defaults.cluster.pod_resources.large }}'
       storage:
         enabled: false
         access_modes:
           - ReadWriteOnce
-        class: longhorn
-        size: 5Gi
+        class: '{{ victoria_metrics_storage_class | default(defaults.victoria_metrics.storage_class) }}'
+        size: '{{ victoria_metrics_aux_storage_size | default(defaults.victoria_metrics.aux_storage_size) }}'
     vmalert:
       config_reloader:
-        resources:
-          limits:
-            cpu: null
-            memory: 128Mi
-          requests:
-            cpu: 10m
-            memory: 128Mi
+        resources: '{{ defaults.cluster.pod_resources.small }}'
       ingress:
         enabled: true
         # -- See [documentation](https://axivo.com/k3s-cluster/tutorials/handbook/externaldns/#front-ends), for details
         subdomain: alert
       log_level: WARN
       replicas: 1
-      resources:
-        limits:
-          cpu: null
-          memory: 128Mi
-        requests:
-          cpu: 10m
-          memory: 128Mi
+      resources: '{{ defaults.cluster.pod_resources.small }}'
     vmcluster:
       # -- If false, `vmsingle` settings are used
-      enabled: false
+      enabled: '{{ victoria_metrics_cluster_enabled | default(defaults.victoria_metrics.cluster_enabled) }}'
       replication_factor: 2
-      retention_period: 72h
+      retention_period: '{{ victoria_metrics_retention | default(defaults.victoria_metrics.retention) }}'
       vminsert:
         hpa:
           enabled: true
@@ -202,13 +143,7 @@ victoriametrics_vars:
           # -- See [documentation](https://axivo.com/k3s-cluster/tutorials/handbook/externaldns/#front-ends), for details
           subdomain: insert
         log_level: WARN
-        resources:
-          limits:
-            cpu: null
-            memory: 512Mi
-          requests:
-            cpu: 10m
-            memory: 512Mi
+        resources: '{{ defaults.cluster.pod_resources.large }}'
       vmselect:
         hpa:
           enabled: true
@@ -223,19 +158,13 @@ victoriametrics_vars:
           # -- See [documentation](https://axivo.com/k3s-cluster/tutorials/handbook/externaldns/#front-ends), for details
           subdomain: metrics
         log_level: WARN
-        resources:
-          limits:
-            cpu: null
-            memory: 512Mi
-          requests:
-            cpu: 10m
-            memory: 512Mi
+        resources: '{{ defaults.cluster.pod_resources.large }}'
         storage:
           enabled: false
           access_modes:
             - ReadWriteOnce
-          class: longhorn
-          size: 5Gi
+          class: '{{ victoria_metrics_storage_class | default(defaults.victoria_metrics.storage_class) }}'
+          size: '{{ victoria_metrics_aux_storage_size | default(defaults.victoria_metrics.aux_storage_size) }}'
       vmstorage:
         ingress:
           enabled: false
@@ -243,19 +172,13 @@ victoriametrics_vars:
           subdomain: storage
         log_level: WARN
         replicas: 1
-        resources:
-          limits:
-            cpu: null
-            memory: 2560Mi
-          requests:
-            cpu: 10m
-            memory: 2560Mi
+        resources: '{{ defaults.cluster.pod_resources.large }}'
         storage:
           enabled: true
           access_modes:
             - ReadWriteOnce
-          class: longhorn
-          size: 50Gi
+          class: '{{ victoria_metrics_storage_class | default(defaults.victoria_metrics.storage_class) }}'
+          size: '{{ victoria_metrics_storage_size | default(defaults.victoria_metrics.storage_size) }}'
     vmsingle:
       ingress:
         enabled: true
@@ -263,17 +186,11 @@ victoriametrics_vars:
         subdomain: metrics
       log_level: WARN
       replicas: 1
-      resources:
-        limits:
-          cpu: null
-          memory: 2560Mi
-        requests:
-          cpu: 10m
-          memory: 2560Mi
-      retention_period: 72h
+      resources: '{{ defaults.cluster.pod_resources.large }}'
+      retention_period: '{{ victoria_metrics_retention | default(defaults.victoria_metrics.retention) }}'
       storage:
         enabled: true
         access_modes:
           - ReadWriteOnce
-        class: longhorn
-        size: 50Gi
+        class: '{{ victoria_metrics_storage_class | default(defaults.victoria_metrics.storage_class) }}'
+        size: '{{ victoria_metrics_storage_size | default(defaults.victoria_metrics.storage_size) }}'

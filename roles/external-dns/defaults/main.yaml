@@ -4,16 +4,16 @@ externaldns_vars:
     acme:
       # -- Available options are [`production`](https://letsencrypt.org/docs/rate-limits/)
       # and [`staging`](https://letsencrypt.org/docs/staging-environment/)
-      server: staging
+      server: '{{ external_dns_acme_server | default(defaults.external_dns.acme_server) }}'
     host:
       # -- See [documentation](https://axivo.com/k3s-cluster/tutorials/handbook/externaldns/#front-ends), for details
-      domain: noty.cc
+      domain: '{{ external_dns_domain | default(defaults.external_dns.domain) }}'
     prefix: cloudflare
   kubernetes:
     helm:
       chart:
         name: external-dns
-        version: v1.20.0
+        version: '{{ external_dns_chart_version | default("v1.20.0") }}'
       repository:
         name: external-dns
         org: kubernetes-sigs
@@ -21,10 +21,4 @@ externaldns_vars:
     log_level: warning
     namespace: kube-system
     policy: sync
-    resources:
-      limits:
-        cpu: null
-        memory: 128Mi
-      requests:
-        cpu: 10m
-        memory: 128Mi
+    resources: '{{ defaults.cluster.pod_resources.small }}'

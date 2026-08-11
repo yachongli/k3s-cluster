@@ -64,6 +64,14 @@ server:
 {% endif %}
 {% endif %}
   retentionPeriod: {{ victorialogs_vars.kubernetes.server.retention_period }}
+{% if victorialogs_vars.kubernetes.pin.node_selector.keys() | length > 0 %}
+  nodeSelector:
+    {{ victorialogs_vars.kubernetes.pin.node_selector | to_nice_yaml(indent=2) | trim | indent(4) }}
+{% endif %}
+{% if victorialogs_vars.kubernetes.pin.tolerations | length > 0 %}
+  tolerations:
+    {{ victorialogs_vars.kubernetes.pin.tolerations | to_nice_yaml(indent=2) | trim | indent(4) }}
+{% endif %}
 {% if victorialogs_vars.kubernetes.vector.enabled is truthy %}
 vector:
   enabled: true
