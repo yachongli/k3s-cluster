@@ -63,6 +63,68 @@ Longhorn 部署后在 `kube-system` 和 `longhorn-system` 两个 namespace 中�
 > 它们是 longhorn-manager pod 内的子进程，`kubectl get pods` 看不到。
 > 用 `kubectl get engines.longhorn.io` 和 `kubectl get replicas.longhorn.io` 查看。
 
+### K8s Services
+
+Longhorn chart 创建了 4 个 Service，用于组件间通信：
+
+| Service | 端口 | 类型 | 作用 |
+|---------|------|------|------|
+| **longhorn-backend** | 9500 | ClusterIP | longhorn-manager API 主入口。CSI plugin、Longhorn UI、longhornctl 都通过它操作卷 |
+| **longhorn-admission-webhook** | 9502 | ClusterIP | 准入校验。拦截 K8s API 对 Longhorn CRD 的操作（创建/删除/修改），校验合法性。比如删除有副本的节点时阻止 |
+| **longhorn-recovery-backend** | 9503 | ClusterIP | 紧急恢复。节点宕机后强制 detach 卷、从备份恢复数据等特殊操作 |
+| **longhorn-frontend** | 80 | ClusterIP | Longhorn UI Web 界面 |
+
+### CSI 三层调用架构
+
+Longhorn 遵循标准 CSI 规范，有三层调用关系：
+
+```mermaid
+flowchart TD
+    subgraph CSI["CSI 侧车 (Deployments, 全局唯一)"]
+        PROV["csi-provisioner<br/>watch PVC → CreateVolume"]
+        ATT["csi-attacher<br/>watch VolumeAttachment → ControllerPublishVolume"]
+        SNAP["csi-snapshotter<br/>watch VolumeSnapshot → CreateSnapshot"]
+        RES["csi-resizer<br/>watch PVC resize → ControllerExpandVolume"]
+    end
+
+    subgraph PLUGIN["longhorn-csi-plugin (DaemonSet, 每节点)"]
+        CSICTL["Controller Service<br/>CreateVolume / DeleteVolume / ..."]
+        CSINODE["Node Service<br/>NodePublishVolume / ..."]
+    end
+
+    subgraph MGR["longhorn-manager (DaemonSet, 每节点)"]
+        API["Longhorn API<br/>创建卷/副本/引擎"]
+        INST["instance-manager<br/>管理 engine/replica 进程"]
+    end
+
+    subgraph K8SNODE["kubelet (本地)"]
+        KUB["Pod 需要 PVC<br/>→ NodePublishVolume"]
+    end
+
+    PROV -- "gRPC over<br/>K8s Service<br/>(非本地, 负载均衡)" --> CSICTL
+    ATT -- "gRPC over<br/>K8s Service" --> CSICTL
+    SNAP -- "gRPC over<br/>K8s Service" --> CSICTL
+    RES -- "gRPC over<br/>K8s Service" --> CSICTL
+
+    KUB -- "gRPC over<br/>本地 Unix socket<br/>(必须本地)" --> CSINODE
+
+    CSICTL -- "HTTP →<br/>longhorn-backend:9500" --> API
+    CSINODE -- "HTTP →<br/>longhorn-backend:9500" --> API
+    API --> INST
+```
+
+**三种调用方式对比：**
+
+| 调用方 → 被调用方 | 通信方式 | 本地？ | 用途 |
+|-------------------|---------|--------|------|
+| CSI 侧车 → csi-plugin | gRPC over K8s Service | ❌ 负载均衡到任意节点 | 卷级操作（创建/删除/扩容/快照） |
+| kubelet → csi-plugin | gRPC over Unix socket | ✅ 必须本地 | 节点级操作（挂载/卸载） |
+| csi-plugin → longhorn-manager | HTTP over longhorn-backend:9500 | ❌ 负载均衡到任意 manager | 所有 Longhorn API 调用 |
+
+> **关键**：CSI 侧车（provisioner 等）不调用"本地"的 csi-plugin，而是通过 K8s Service
+> 负载均衡到任意节点上的 csi-plugin。只有 kubelet 调用的是本地的 csi-plugin
+> （通过 Unix socket），因为 NodePublishVolume 必须在 Pod 所在节点执行。
+
 ---
 
 ## 3. 工作原理
