@@ -7,6 +7,21 @@
   ansible.builtin.import_tasks:
     file: precheck.yaml
 
+- name: Read existing token from config
+  ansible.builtin.command:
+    cmd: 'sed -n "s/^token:[[:space:]]*//p" {{ k3s_project.cluster.config }}'
+  register: _k3s_existing_token
+  changed_when: false
+  failed_when: false
+
+- name: Preserve token from existing config
+  ansible.builtin.set_fact:
+    k3s_project: '{{ k3s_project | combine({"cluster": {"token": _k3s_existing_token.stdout | trim}}, recursive=true) }}'
+  when:
+    - k3s_project.cluster.token | default("") | length == 0
+    - _k3s_existing_token.rc == 0
+    - _k3s_existing_token.stdout | trim | length > 0
+
 - name: Role Provisioning
   notify: Start kubernetes service
   block:
