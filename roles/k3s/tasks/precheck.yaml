@@ -84,8 +84,11 @@
       when:
         - _precheck_node_vmis | default([]) | length > 0
 
-- name: Clean stale CPU manager state (policy change detected)
+- name: Clean CPU manager state (static policy desired)
   ansible.builtin.file:
-    path: '{{ k3s_map.node.directory.data }}/agent/kubelet/cpu_manager_state'
+    path: '{{ item }}'
     state: absent
-  when: _precheck_policy_changing | default(false)
+  loop:
+    - /var/lib/kubelet/cpu_manager_state
+    - '{{ k3s_map.node.directory.data }}/agent/kubelet/cpu_manager_state'
+  when: "'cpu-manager-policy=static' in (k3s_map.node.kubelet.args | join(' '))"
