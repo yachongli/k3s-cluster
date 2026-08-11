@@ -2,15 +2,15 @@
 # ========================================================================
 # Kubelet switch precheck.
 #
-# Detects when a node's kubelet CPU policy is about to change (static ↔
-# none) and checks for running KubeVirt VMs that would be killed by the
-# kubelet restart. API queries are delegated to a server node (which has
-# kubeconfig at /etc/rancher/k3s/k3s.yaml).
+# 1. Detects when kubelet CPU policy is about to change (static ↔ none)
+# 2. If KubeVirt is enabled, checks for running VMs (kubelet restart kills them)
+# 3. Cleans stale cpu_manager_state so kubelet can cleanly start with new policy
 #
-# Skipped when:
-#   - First deploy (no kubeconfig on server yet)
-#   - KubeVirt not enabled (no VMs to worry about)
-#   - Policy not changing (idempotent re-run, current config matches desired)
+# The stale state file is the #1 reason `cpumanager=false` persists on a
+# node after switching to static: kubelet reads the old `none`-era state,
+# finds it incompatible with static policy, and silently falls back to none.
+#
+# Skipped on first deploy (no kubeconfig on server yet).
 # ========================================================================
 
 - name: Check kubeconfig on server
@@ -20,26 +20,29 @@
   run_once: true
   register: _precheck_kubeconfig
 
-- name: Kubelet Switch Precheck
+- name: Read current k3s config
+  ansible.builtin.slurp:
+    path: '{{ k3s_project.cluster.config }}'
+  register: _precheck_current_config
+  ignore_errors: true
+  when: _precheck_kubeconfig.stat.exists
+
+- name: Detect kubelet policy change
+  ansible.builtin.set_fact:
+    _precheck_policy_changing: >-
+      {{
+        _precheck_kubeconfig.stat.exists
+        and _precheck_current_config is success
+        and ('cpu-manager-policy=static' in (_precheck_current_config.content | b64decode))
+            != ('cpu-manager-policy=static' in (k3s_map.node.kubelet.args | join(' ')))
+      }}
+  when: _precheck_kubeconfig.stat.exists
+
+- name: Check for running KubeVirt VMs (policy change detected)
   when:
-    - _precheck_kubeconfig.stat.exists
+    - _precheck_policy_changing | default(false)
     - enable_kubevirt | default(false) | bool
   block:
-    - name: Read current k3s config
-      ansible.builtin.slurp:
-        path: '{{ k3s_project.cluster.config }}'
-      register: _precheck_current_config
-      ignore_errors: true
-
-    - name: Detect kubelet policy change
-      ansible.builtin.set_fact:
-        _precheck_policy_changing: >-
-          {{
-            _precheck_current_config is success
-            and ('cpu-manager-policy=static' in (_precheck_current_config.content | b64decode))
-            != ('cpu-manager-policy=static' in (k3s_map.node.kubelet.args | join(' ')))
-          }}
-
     - name: Check for running VMs on this node
       kubernetes.core.k8s_info:
         api_version: kubevirt.io/v1
@@ -47,7 +50,6 @@
         kubeconfig: '{{ k3s_project.cluster.kubeconfig }}'
       delegate_to: '{{ k3s_map.server.default_host }}'
       register: _precheck_vmis
-      when: _precheck_policy_changing
 
     - name: Filter VMs running on this node
       ansible.builtin.set_fact:
@@ -59,7 +61,6 @@
             | selectattr('status.phase', 'in', ['Running', 'Scheduled'])
             | list
           }}
-      when: _precheck_policy_changing
 
     - name: Fail if VMs are running (policy change detected)
       ansible.builtin.fail:
@@ -79,7 +80,12 @@
             2. Or drain the node (stops all VMs):
                  kubectl cordon {{ inventory_hostname }}
                  kubectl drain {{ inventory_hostname }} --ignore-daemonsets --delete-emptydir-data
-             3. Re-run: ansible-playbook provisioning.yaml -t kubernetes
+            3. Re-run: ansible-playbook provisioning.yaml -t kubernetes
       when:
-        - _precheck_policy_changing
         - _precheck_node_vmis | default([]) | length > 0
+
+- name: Clean stale CPU manager state (policy change detected)
+  ansible.builtin.file:
+    path: '{{ k3s_map.node.directory.data }}/agent/kubelet/cpu_manager_state'
+    state: absent
+  when: _precheck_policy_changing | default(false)
