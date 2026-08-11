@@ -79,7 +79,7 @@
             2. Or drain the node (stops all VMs):
                  kubectl cordon {{ inventory_hostname }}
                  kubectl drain {{ inventory_hostname }} --ignore-daemonsets --delete-emptydir-data
-            3. Re-run: ansible-playbook provisioning.yaml -t k3s
+             3. Re-run: ansible-playbook provisioning.yaml -t kubernetes
       when:
         - _precheck_policy_changing
         - _precheck_node_vmis | default([]) | length > 0
