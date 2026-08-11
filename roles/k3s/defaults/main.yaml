@@ -3,7 +3,7 @@ k3s_vars:
   cluster:
     controlplane:
       tainted: true
-    domain: cluster.local
+    domain: '{{ cluster_domain | default(defaults.cluster.domain) }}'
     gitops:
       provider: argo-cd
     kubeconfig:
@@ -14,35 +14,34 @@ k3s_vars:
       host: 127.0.0.1
       port: 6444
     # -- Related to `server.api.host` key
-    tls_san:
-      - 192.168.4.10
+    tls_san: "{{ [cluster_api_host | default(defaults.cluster.api_host)] + (cluster_tls_san_extra | default(defaults.cluster.tls_san_extra)) }}"
   network:
-    interface: eth0
+    interface: '{{ network_interface | default(defaults.cluster.network_interface) }}'
   release:
     k3s:
       # -- See [documentation](https://axivo.com/k3s-cluster/tutorials/handbook/server/#hardware), for details
-      checksum: sha256sum-arm64.txt
+      checksum: 'sha256sum-{{ defaults.cluster.architecture_binary | default("amd64") }}.txt'
       # -- See [documentation](https://axivo.com/k3s-cluster/tutorials/handbook/server/#hardware), for details
-      file: k3s-arm64
+      file: 'k3s'
       name: k3s
       repository:
         name: k3s
         org: k3s-io
-      version: v1.34.6+k3s1
+      version: '{{ k3s_version | default("v1.34.6+k3s1") }}'
     kubepug:
       checksum: checksums.txt
       # -- See [documentation](https://axivo.com/k3s-cluster/tutorials/handbook/server/#hardware), for details
-      file: kubepug_linux_arm64.tar.gz
+      file: 'kubepug_linux_{{ defaults.cluster.architecture_binary | default("amd64") }}.tar.gz'
       name: kubepug
       repository:
         name: kubepug
         org: kubepug
-      version: v1.7.1
+      version: '{{ kubepug_version | default("v1.7.1") }}'
   server:
     api:
       # -- Related to `cluster.tls_san` key,
       # used as frontend bind IP for Haproxy loadbalancer and populated into `/.kube/config` file
-      host: 192.168.4.10
+      host: '{{ cluster_api_host | default(defaults.cluster.api_host) }}'
       port: 6443
   service:
     debug: false

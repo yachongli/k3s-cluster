@@ -17,6 +17,7 @@
             autoremove: true
             clean: true
             purge: true
+          environment: '{{ _apt_environment }}'
           loop:
             - haproxy
             - keepalived

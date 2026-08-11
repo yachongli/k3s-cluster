@@ -12,7 +12,7 @@
         password: "{{ lookup('ansible.builtin.password', '/dev/null', chars=['ascii_letters', 'digits'], length=8) }}"
       node:
         default_registry_endpoint:
-          enabled: true
+          enabled: '{{ (defaults.cluster.registry.endpoint | default("")) | length == 0 }}'
         directory:
           bin: /usr/local/bin
           config: /etc/rancher/k3s
@@ -27,6 +27,26 @@
             cpu: 1000m
             ephemeral_storage: 5Gi
             memory: 1Gi
+          # -- Active kubelet-arg list (auto-selected by group membership).
+          # Concatenates: common_args + preset(pod|kubevirt) + override.
+          # Override is split into a group-level and host-level list so that
+          # host_vars ADD to (not replace) the group-level override:
+          #   pod node      → pod_kubelet_override (group) + pod_kubelet_override_host (host)
+          #   kubevirt node → kubevirt_kubelet_override (group) + kubevirt_kubelet_override_host (host)
+          # All entries are raw strings rendered verbatim into kubelet-arg:.
+          # No validation of relationships — kubelet handles conflicts (last wins).
+          args: >-
+            {%- if inventory_hostname in (groups.kubevirt | default([])) -%}
+            {{- defaults.cluster.kubelet.common_args
+                + defaults.cluster.kubelet.kubevirt
+                + (kubevirt_kubelet_override | default([]))
+                + (kubevirt_kubelet_override_host | default([])) -}}
+            {%- else -%}
+            {{- defaults.cluster.kubelet.common_args
+                + defaults.cluster.kubelet.pod
+                + (pod_kubelet_override | default([]))
+                + (pod_kubelet_override_host | default([])) -}}
+            {%- endif -%}
         sysctl_parameters:
           fs.file-max: 1048576
           fs.inotify.max_user_watches: 262144

@@ -27,6 +27,7 @@
         name: '{{ item }}'
         autoremove: true
         update_cache: true
+      environment: '{{ _apt_environment }}'
       loop:
         - haproxy
         - keepalived

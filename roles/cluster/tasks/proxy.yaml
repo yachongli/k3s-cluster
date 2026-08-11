@@ -1,0 +1,117 @@
+---
+# Persistent system-wide HTTP/HTTPS proxy for helm, git, and containerd.
+# Activated when cluster_http_proxy is set. To remove, clear the variable
+# and re-run — the files will be deleted.
+#
+# Temporary deploy-time proxy is handled separately via the _proxy_environment
+# fact in group_vars/all/main.yaml, injected at play level (no files written).
+
+- name: Persistent Proxy Configuration
+  when: cluster_http_proxy | default('') | length > 0
+  block:
+    - name: Normalize no_proxy list to comma-separated string
+      ansible.builtin.set_fact:
+        _cluster_no_proxy: >-
+          {{
+            (cluster_no_proxy | default([]))
+            | flatten
+            | map('regex_replace', '\s+', '')
+            | join(',')
+          }}
+
+    - name: Write proxy profile for interactive shells
+      ansible.builtin.copy:
+        dest: /etc/profile.d/proxy.sh
+        owner: root
+        group: root
+        mode: '644'
+        content: |
+          # Managed by Ansible — k3s-cluster cluster role
+          export http_proxy='{{ cluster_http_proxy }}'
+          export https_proxy='{{ cluster_https_proxy | default(cluster_http_proxy) }}'
+          export HTTP_PROXY='{{ cluster_http_proxy }}'
+          export HTTPS_PROXY='{{ cluster_https_proxy | default(cluster_http_proxy) }}'
+          export no_proxy='{{ _cluster_no_proxy }}'
+          export NO_PROXY='{{ _cluster_no_proxy }}'
+
+    - name: Ensure systemd drop-in directory exists
+      ansible.builtin.file:
+        path: /etc/systemd/system.conf.d
+        state: directory
+        owner: root
+        group: root
+        mode: '755'
+
+    - name: Write proxy environment for systemd services
+      ansible.builtin.copy:
+        dest: /etc/systemd/system.conf.d/proxy.conf
+        owner: root
+        group: root
+        mode: '644'
+        content: |
+          # Managed by Ansible — k3s-cluster cluster role
+          [Manager]
+          DefaultEnvironment=HTTP_PROXY={{ cluster_http_proxy }} HTTPS_PROXY={{ cluster_https_proxy | default(cluster_http_proxy) }} NO_PROXY={{ _cluster_no_proxy }}
+      notify: Reload systemd daemon
+
+    - name: Create K3s systemd drop-in directory
+      ansible.builtin.file:
+        path: /etc/systemd/system/k3s.service.d
+        state: directory
+        owner: root
+        group: root
+        mode: '755'
+
+    - name: Write K3s proxy drop-in
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/k3s.service.d/proxy.conf
+        owner: root
+        group: root
+        mode: '644'
+        content: |
+          # Managed by Ansible — k3s-cluster cluster role
+          [Service]
+          Environment=HTTP_PROXY={{ cluster_http_proxy }}
+          Environment=HTTPS_PROXY={{ cluster_https_proxy | default(cluster_http_proxy) }}
+          Environment=NO_PROXY={{ _cluster_no_proxy }}
+      notify: Reload systemd daemon
+
+    - name: Configure git to use proxy
+      community.general.git_config:
+        scope: system
+        name: http.proxy
+        value: '{{ cluster_http_proxy }}'
+
+    - name: Reload systemd daemon
+      ansible.builtin.systemd:
+        daemon_reload: true
+
+- name: Remove Persistent Proxy
+  when: cluster_http_proxy | default('') | length == 0
+  block:
+    - name: Remove proxy profile
+      ansible.builtin.file:
+        path: /etc/profile.d/proxy.sh
+        state: absent
+
+    - name: Remove systemd global proxy drop-in
+      ansible.builtin.file:
+        path: /etc/systemd/system.conf.d/proxy.conf
+        state: absent
+      notify: Reload systemd daemon
+
+    - name: Remove K3s proxy drop-in
+      ansible.builtin.file:
+        path: /etc/systemd/system/k3s.service.d/proxy.conf
+        state: absent
+      notify: Reload systemd daemon
+
+    - name: Remove git proxy config
+      community.general.git_config:
+        scope: system
+        name: http.proxy
+        state: absent
+
+    - name: Reload systemd daemon
+      ansible.builtin.systemd:
+        daemon_reload: true

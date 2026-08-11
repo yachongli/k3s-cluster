@@ -1,15 +1,17 @@
 ---
+# -- helm-diff plugin download URL. Default uses GitHub upstream. Override
+# in globals.yaml when GitHub is slow or unreachable (e.g. China mainland).
+helm_plugin_diff_url: 'https://github.com/databus23/helm-diff'
+
 helm_vars:
   environment:
     HELM_NAMESPACE: default
   plugins:
     - name: diff
       enabled: true
-      packages:
-        - python3-jsonpatch
       repository:
-        url: https://github.com/databus23/helm-diff
-      version: v3.15.6
+        url: '{{ helm_plugin_diff_url }}'
+      version: '{{ helm_diff_plugin_version | default("v3.15.6") }}'
   release:
     helm:
       distro:
@@ -20,4 +22,4 @@ helm_vars:
         channel: stable
         key: gpgkey
         url: https://packages.buildkite.com/helm-linux/helm-debian
-      version: v3.20.0-1
+      version: '{{ helm_version | default("v3.20.0-1") }}'

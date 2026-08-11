@@ -2,6 +2,18 @@
 - name: Set map fact
   ansible.builtin.set_fact:
     cluster_map:
+      architecture:
+        # -- Raw kernel arch (aarch64, x86_64, armv7l, ...)
+        machine: '{{ ansible_facts.machine | default("x86_64") }}'
+        # -- Normalized binary suffix used by upstream releases (arm64, amd64).
+        # Fallback is amd64.
+        binary: >-
+          {%- set m = ansible_facts.machine | default("x86_64") -%}
+          {%- if m == 'aarch64' -%}arm64
+          {%- elif m == 'x86_64' -%}amd64
+          {%- elif m == 'armv7l' -%}arm
+          {%- else -%}{{ m }}
+          {%- endif -%}
       ssh:
         authorized_key: "{{ '/'.join([cluster_vars.ssh.path, cluster_vars.ssh.key]) }}"
 

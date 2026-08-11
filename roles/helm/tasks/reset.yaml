@@ -29,6 +29,7 @@
             autoremove: true
             clean: true
             purge: true
+          environment: '{{ _apt_environment }}'
           loop: '{{ helm_vars.plugins }}'
           when: item.packages is defined
 
@@ -39,6 +40,7 @@
             autoremove: true
             clean: true
             purge: true
+          environment: '{{ _apt_environment }}'
           loop:
             - apt-transport-https
             - helm

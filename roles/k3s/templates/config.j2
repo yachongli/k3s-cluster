@@ -31,6 +31,9 @@ kube-scheduler-arg: bind-address={{ k3s_node.ip }}
 {% endif %}
 kubelet-arg:
   - config={{ k3s_project.cluster.config_kubelet }}
+{% for arg in k3s_map.node.kubelet.args %}
+  - {{ arg }}
+{% endfor %}
 {% if
   (k3s_resources.node.taint.agent | length > 0) or
   (k3s_vars.cluster.controlplane.tainted is truthy and k3s_node.service.type | lower == 'server' and k3s_resources.node.taint.server | length > 0)

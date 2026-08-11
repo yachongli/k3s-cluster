@@ -1,0 +1,85 @@
+---
+# ========================================================================
+# Kubelet switch precheck.
+#
+# Detects when a node's kubelet CPU policy is about to change (static ↔
+# none) and checks for running KubeVirt VMs that would be killed by the
+# kubelet restart. API queries are delegated to a server node (which has
+# kubeconfig at /etc/rancher/k3s/k3s.yaml).
+#
+# Skipped when:
+#   - First deploy (no kubeconfig on server yet)
+#   - KubeVirt not enabled (no VMs to worry about)
+#   - Policy not changing (idempotent re-run, current config matches desired)
+# ========================================================================
+
+- name: Check kubeconfig on server
+  ansible.builtin.stat:
+    path: '{{ k3s_project.cluster.kubeconfig }}'
+  delegate_to: '{{ k3s_map.server.default_host }}'
+  run_once: true
+  register: _precheck_kubeconfig
+
+- name: Kubelet Switch Precheck
+  when:
+    - _precheck_kubeconfig.stat.exists
+    - enable_kubevirt | default(false) | bool
+  block:
+    - name: Read current k3s config
+      ansible.builtin.slurp:
+        path: '{{ k3s_project.cluster.config }}'
+      register: _precheck_current_config
+      ignore_errors: true
+
+    - name: Detect kubelet policy change
+      ansible.builtin.set_fact:
+        _precheck_policy_changing: >-
+          {{
+            _precheck_current_config is success
+            and ('cpu-manager-policy=static' in (_precheck_current_config.content | b64decode))
+            != ('cpu-manager-policy=static' in (k3s_map.node.kubelet.args | join(' ')))
+          }}
+
+    - name: Check for running VMs on this node
+      kubernetes.core.k8s_info:
+        api_version: kubevirt.io/v1
+        kind: VirtualMachineInstance
+        kubeconfig: '{{ k3s_project.cluster.kubeconfig }}'
+      delegate_to: '{{ k3s_map.server.default_host }}'
+      register: _precheck_vmis
+      when: _precheck_policy_changing
+
+    - name: Filter VMs running on this node
+      ansible.builtin.set_fact:
+        _precheck_node_vmis: >-
+          {{
+            _precheck_vmis.resources | default([])
+            | selectattr('status.nodeName', 'defined')
+            | selectattr('status.nodeName', 'equalto', ansible_facts.hostname | default(inventory_hostname))
+            | selectattr('status.phase', 'in', ['Running', 'Scheduled'])
+            | list
+          }}
+      when: _precheck_policy_changing
+
+    - name: Fail if VMs are running (policy change detected)
+      ansible.builtin.fail:
+        msg: |-
+          ERROR: Node {{ inventory_hostname }} has {{ _precheck_node_vmis | length }} running VM(s)
+          and its kubelet CPU policy is about to change (static ↔ none).
+          Kubelet will restart and kill these VMs.
+
+          Running VMs:
+          {% for vmi in _precheck_node_vmis %}
+            - {{ vmi.metadata.namespace }}/{{ vmi.metadata.name }} (phase: {{ vmi.status.phase }})
+          {% endfor %}
+
+          FIXES:
+            1. Migrate VMs to another node:
+                 virtctl migrate <vm-name> -n <namespace>
+            2. Or drain the node (stops all VMs):
+                 kubectl cordon {{ inventory_hostname }}
+                 kubectl drain {{ inventory_hostname }} --ignore-daemonsets --delete-emptydir-data
+            3. Re-run: ansible-playbook provisioning.yaml -t k3s
+      when:
+        - _precheck_policy_changing
+        - _precheck_node_vmis | default([]) | length > 0

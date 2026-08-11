@@ -8,8 +8,11 @@
   ansible.builtin.import_tasks:
     file: user.yaml
 
+- name: Proxy Configuration
+  ansible.builtin.import_tasks:
+    file: proxy.yaml
+
 - name: Cluster Provisioning
-  when: cluster_valid_hardware_product is truthy
   block:
     - name: Cluster Configuration
       ansible.builtin.import_tasks:

@@ -115,12 +115,6 @@
             mode: '755'
             remote_src: true
 
-        - name: Remove kubepug archive
-          ansible.builtin.file:
-            path: /tmp/{{ k3s_vars.release.kubepug.file }}
-            state: absent
-          check_mode: false
-
 - name: Local Configuration
   when:
     - k3s_vars.cluster.kubeconfig.local is truthy

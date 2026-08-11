@@ -3,6 +3,10 @@
   ansible.builtin.import_tasks:
     file: facts.yaml
 
+- name: Kubelet Switch Precheck
+  ansible.builtin.import_tasks:
+    file: precheck.yaml
+
 - name: Role Provisioning
   notify: Start kubernetes service
   block:

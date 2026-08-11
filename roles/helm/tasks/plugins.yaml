@@ -2,11 +2,12 @@
 - name: Remove Helm Plugins
   notify: Restart cache service
   block:
-    - name: Remove plugins
+    - name: Remove disabled plugins
       kubernetes.core.helm_plugin:
         plugin_name: '{{ item.name }}'
         state: absent
       loop: '{{ helm_vars.plugins }}'
+      when: item.enabled is falsy
 
     - name: Remove plugin packages
       ansible.builtin.apt:
@@ -15,6 +16,7 @@
         autoremove: true
         clean: true
         purge: true
+      environment: '{{ _apt_environment }}'
       loop: '{{ helm_plugin_packages_disabled | default([]) }}'
 
 - name: Install Helm Plugins
@@ -24,6 +26,7 @@
         name: '{{ item }}'
         autoremove: true
         update_cache: true
+      environment: '{{ _apt_environment }}'
       loop: '{{ helm_plugin_packages | default([]) }}'
 
     - name: Install plugins
@@ -36,3 +39,44 @@
       retries: 3
       until: helm_result is not failed
       when: item.enabled is truthy
+
+    - name: Check helm-diff binary
+      ansible.builtin.stat:
+        path: '{{ helm_map.directory.share }}/plugins/helm-diff/bin/diff'
+      register: helm_diff_binary
+
+    - name: Fix missing helm-diff binary
+      when: not helm_diff_binary.stat.exists
+      block:
+        - name: Download helm-diff binary
+          ansible.builtin.get_url:
+            url: 'https://github.com/databus23/helm-diff/releases/download/{{ helm_vars.plugins[0].version }}/helm-diff-linux-{{ defaults.cluster.architecture_binary }}.tgz'
+            dest: '/tmp/helm-diff.tgz'
+            mode: '644'
+          delay: 1
+          retries: 3
+          until: helm_diff_download is not failed
+          register: helm_diff_download
+
+        - name: Create bin directory
+          ansible.builtin.file:
+            path: '{{ helm_map.directory.share }}/plugins/helm-diff/bin'
+            state: directory
+            owner: root
+            group: root
+            mode: '755'
+
+        - name: Extract helm-diff binary
+          ansible.builtin.unarchive:
+            src: '/tmp/helm-diff.tgz'
+            dest: '{{ helm_map.directory.share }}/plugins/helm-diff/bin/'
+            remote_src: true
+            extra_opts:
+              - --strip-components=1
+
+        - name: Set helm-diff binary permissions
+          ansible.builtin.file:
+            path: '{{ helm_map.directory.share }}/plugins/helm-diff/bin/diff'
+            owner: root
+            group: root
+            mode: '755'

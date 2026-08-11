@@ -17,6 +17,7 @@
         name: '{{ item }}'
         autoremove: true
         update_cache: true
+      environment: '{{ _apt_environment }}'
       loop:
         - apt-transport-https
         - python3-kubernetes
@@ -63,11 +64,6 @@
           changed_when: helm_dearmor_key.rc == 0
           register: helm_dearmor_key
 
-        - name: Remove key
-          ansible.builtin.file:
-            path: /tmp/{{ helm_vars.release.helm.repository.key }}
-            state: absent
-
         - name: Get architecture
           ansible.builtin.command:
             cmd: dpkg --print-architecture
@@ -91,6 +87,7 @@
         allow_downgrade: true
         autoremove: true
         update_cache: true
+      environment: '{{ _apt_environment }}'
 
     - name: Helm Cache
       notify: Start cache service

@@ -1,6 +1,8 @@
+{% if defaults.cluster.registry.endpoint | length > 0 %}
 mirrors:
-  docker.io:
-  gcr.io:
-  ghcr.io:
-  quay.io:
-  registry.k8s.io:
+{% for mirror in defaults.cluster.registry.mirrors %}
+  {{ mirror }}:
+    endpoint:
+      - "{{ defaults.cluster.registry.endpoint }}"
+{% endfor %}
+{% endif %}

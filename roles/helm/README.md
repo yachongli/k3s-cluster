@@ -24,7 +24,6 @@ See the related role variables listed below, defined into [main.yaml](./defaults
 | helm_vars.environment.HELM_NAMESPACE | string | `"default"` |  |
 | helm_vars.plugins[0].enabled | bool | `true` |  |
 | helm_vars.plugins[0].name | string | `"diff"` |  |
-| helm_vars.plugins[0].packages[0] | string | `"python3-jsonpatch"` |  |
 | helm_vars.plugins[0].repository.url | string | `"https://github.com/databus23/helm-diff"` |  |
 | helm_vars.plugins[0].version | string | `"v3.15.6"` |  |
 | helm_vars.release.helm.distro.channel | string | `"any"` |  |

@@ -13,6 +13,7 @@
         allow_downgrade: true
         autoremove: true
         update_cache: true
+      environment: '{{ _apt_environment }}'
 
     - name: Helm Plugins
       ansible.builtin.import_tasks:

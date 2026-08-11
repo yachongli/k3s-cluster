@@ -7,9 +7,10 @@
     clean: true
     purge: true
     update_cache: true
+  environment: '{{ _apt_environment }}'
 
 - name: Firmware Files Cleanup
-  when: cluster_vars.hardware.product | lower == 'raspberry pi'
+  when: ansible_facts.machine == 'aarch64'
   block:
     - name: Find firmware backup files
       ansible.builtin.find:

@@ -4,24 +4,6 @@
     name: cluster
     tasks_from: facts
 
-- name: Get hardware product
-  ansible.builtin.shell: |
-    set -eo pipefail
-    lshw -class system -quiet | grep {{ cluster_vars.hardware.product | quote }}
-  args:
-    executable: /bin/bash
-  changed_when: false
-  register: cluster_hardware_product
-
-- name: Set valid hardware product fact
-  ansible.builtin.set_fact:
-    cluster_valid_hardware_product: true
-  when:
-    - ansible_facts.lsb.id | lower == cluster_vars.lsb.id | lower
-    - ansible_facts.lsb.release is version(cluster_vars.lsb.release, '>=')
-    - ansible_facts.machine == cluster_vars.hardware.architecture
-    - cluster_hardware_product.rc == 0
-
 - name: Check internet connectivity
   ansible.builtin.wait_for:
     host: github.com

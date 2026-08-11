@@ -20,7 +20,6 @@ See the related role variables listed below, defined into [main.yaml](./defaults
 | cluster_vars.device.id | string | `"2:2"` | See [documentation](https://axivo.com/k3s-cluster/tutorials/handbook/server/#deviceid), for details |
 | cluster_vars.device.name | string | `"ASMedia Technology"` | See [documentation](https://axivo.com/k3s-cluster/tutorials/handbook/server/#devicename), for details |
 | cluster_vars.hardware.architecture | string | `"aarch64"` | See [documentation](https://axivo.com/k3s-cluster/tutorials/handbook/server/#hardware), for details |
-| cluster_vars.hardware.product | string | `"Raspberry Pi"` | See [documentation](https://axivo.com/k3s-cluster/tutorials/handbook/server/#hardwareproduct), for details |
 | cluster_vars.lsb.id | string | `"Ubuntu"` | Linux Standard Base distribution ID |
 | cluster_vars.lsb.release | float | `24.04` | Linux Standard Base distribution release |
 | cluster_vars.service.bluetooth.enabled | bool | `false` | By default, related `apt` packages are not installed |
@@ -29,7 +28,7 @@ See the related role variables listed below, defined into [main.yaml](./defaults
 | cluster_vars.service.postfix.protocols | string | `"ipv4"` |  |
 | cluster_vars.service.postfix.relay.host | string | `"smtp.mail.me.com"` | iCloud mail server relay host |
 | cluster_vars.service.postfix.relay.port | int | `587` |  |
-| cluster_vars.service.postfix.user | string | Set values into [all.yaml](../../inventory/cluster/group_vars/all.yaml) `credentials` collection | Postfix user credentials, set at global level |
+| cluster_vars.service.postfix.user | string | Set values into [all.yaml](../../inventory/cluster/group_vars/all/main.yaml) `credentials` collection | Postfix user credentials, set at global level |
 | cluster_vars.service.snapd.enabled | bool | `false` |  |
 | cluster_vars.service.unattended_upgrades.enabled | bool | `true` | See [documentation](https://help.ubuntu.com/community/AutomaticSecurityUpdates), for details |
 | cluster_vars.service.unattended_upgrades.mail_report | string | `"only-on-error"` | Available options are `always`, `on-change` and `only-on-error` |
