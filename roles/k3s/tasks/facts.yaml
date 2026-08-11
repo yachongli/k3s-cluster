@@ -28,25 +28,22 @@
             ephemeral_storage: 5Gi
             memory: 1Gi
           # -- Active kubelet-arg list (auto-selected by group membership).
-          # Concatenates: common_args + preset(pod|kubevirt) + override.
-          # Override is split into a group-level and host-level list so that
+          # Built from: common_args + group_override + host_override.
           # host_vars ADD to (not replace) the group-level override:
-          #   pod node      → pod_kubelet_override (group) + pod_kubelet_override_host (host)
-          #   kubevirt node → kubevirt_kubelet_override (group) + kubevirt_kubelet_override_host (host)
-          # All entries are raw strings rendered verbatim into kubelet-arg:.
-          # | unique removes exact duplicates (same key=value) so users can
-          # safely repeat preset items in their override without getting
-          # doubled entries. Different values for the same key are kept
-          # — kubelet resolves conflicts via "last wins".
+          #   pod node      → pod_kubelet_override      (group_vars/pod.yaml)
+          #                  + pod_kubelet_override_host (host_vars/<node>.yaml)
+          #   kubevirt node → kubevirt_kubelet_override      (group_vars/kubevirt.yaml)
+          #                  + kubevirt_kubelet_override_host (host_vars/<node>.yaml)
+          # No per-group preset — the override IS the full group-specific
+          # list. | unique removes exact duplicates (same key=value);
+          # different values for the same key are kept (kubelet: last wins).
           args: >-
             {%- if inventory_hostname in (groups.kubevirt | default([])) -%}
             {{- (defaults.cluster.kubelet.common_args
-                + defaults.cluster.kubelet.kubevirt
                 + (kubevirt_kubelet_override | default([]))
                 + (kubevirt_kubelet_override_host | default([]))) | unique -}}
             {%- else -%}
             {{- (defaults.cluster.kubelet.common_args
-                + defaults.cluster.kubelet.pod
                 + (pod_kubelet_override | default([]))
                 + (pod_kubelet_override_host | default([]))) | unique -}}
             {%- endif -%}

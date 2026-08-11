@@ -441,11 +441,13 @@ enable_gpu_operator: false
 # Kubelet advanced tuning (CPU/memory/topology manager)
 ###################
 
-# kubelet-arg is built from three parts (see group_vars/all/main.yaml):
-#   common_args + preset(pod|kubevirt) + override
-# Override is two-level: group_vars/<group>.yaml (all nodes in group)
-# + host_vars/<node>.yaml (single node, ADDED not replaced).
-# All entries are raw strings rendered verbatim — no validation.
+# kubelet-arg is built from two parts (see group_vars/all/main.yaml):
+#   common_args + group_override + host_override
+# There is NO per-group preset — the override IS the full group-specific
+# list, giving you complete control. host_vars ADD to (not replace) the
+# group-level override.
+# All entries are raw strings rendered verbatim — | unique removes exact
+# duplicates; different values for the same key are kept (kubelet: last wins).
 #
 # A precheck runs automatically before kubelet config is applied
 # (roles/k3s/tasks/precheck.yaml). It detects when cpu-manager-policy is
@@ -455,27 +457,31 @@ enable_gpu_operator: false
 # when KubeVirt is disabled.
 
 # --- Pod workers (group_vars/pod.yaml) ---
-# Default: empty — kubelet uses built-in defaults (no CPU/memory pinning).
+# Default: empty — kubelet uses built-in defaults (cpuManagerPolicy=none).
 # Pod workers don't need static CPU unless running latency-sensitive
 # workloads (databases, ML inference). Add args here if needed:
 #
 # pod_kubelet_override: []
 
 # --- KubeVirt workers (group_vars/kubevirt.yaml) ---
-# Preset (defaults.cluster.kubelet.kubevirt) ALREADY includes:
+# Default: empty — you define the full list here. Recommended starting
+# point for VM CPU pinning with NUMA alignment (only affects Guaranteed
+# QoS pods/VMs; regular Pods still schedule):
+#
+# kubevirt_kubelet_override:
 #   - cpu-manager-policy=static
 #   - topology-manager-policy=restricted
 #   - feature-gates=CPUManagerPolicyAlphaOptions=true
 #   - cpu-manager-policy-options=distribute-cpus-across-numa=true
-# Do NOT repeat those here — they'd be rendered twice and kubelet would
-# see duplicates. Put only ADDITIONAL args below:
-#
-# kubevirt_kubelet_override:
 #   - reserved-cpus=4
 #   # - memory-manager-policy=Static
 #   # - system-reserved=memory=4Gi
 #   # - kube-reserved=memory=4Gi
 #   # - reserved-memory=0:memory=1Gi;1:memory=1Gi;2:memory=1Gi;3:memory=1Gi;4:memory=1Gi;5:memory=1Gi;6:memory=1Gi;7:memory=1Gi
+#
+# To use a non-static policy instead, just set different args:
+# kubevirt_kubelet_override:
+#   - cpu-manager-policy=none
 
 
 # --- Per-host (host_vars/<node>.yaml) ---

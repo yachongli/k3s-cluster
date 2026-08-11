@@ -429,11 +429,12 @@ enable_gpu_operator: false
 # Kubelet 高级调优（CPU / memory / topology manager）
 ###################
 
-# kubelet-arg 由三部分拼接（见 group_vars/all/main.yaml）：
-#   common_args + preset(pod|kubevirt) + override
-# override 分两级：group_vars/<group>.yaml（组内所有节点）
-# + host_vars/<node>.yaml（单机，追加而非替换）。
-# 所有条目都是原始字符串，原样渲染 —— 不做任何验证。
+# kubelet-arg 由两部分拼接（见 group_vars/all/main.yaml）：
+#   common_args + group_override + host_override
+# 没有 per-group 预设 —— override 就是该组的完整列表，你拥有完全控制权。
+# host_vars 追加到（不替换）组级 override。
+# 所有条目都是原始字符串，原样渲染 —— | unique 去除完全重复项；
+# 同 key 不同 value 会保留（kubelet: 后者生效）。
 #
 # kubelet 配置应用前会自动运行 precheck（roles/k3s/tasks/precheck.yaml）。
 # 它检测 cpu-manager-policy 是否正在变化（static ↔ none），如果发现
@@ -442,27 +443,31 @@ enable_gpu_operator: false
 # KubeVirt 未启用时跳过。
 
 # --- Pod 节点（group_vars/pod.yaml）---
-# 默认：空 —— kubelet 用内置默认值（无 CPU/内存绑核）。
+# 默认：空 —— kubelet 用内置默认值（cpuManagerPolicy=none）。
 # Pod 节点通常不需要 static CPU，除非跑延迟敏感型工作负载（数据库、
 # ML 推理）。需要时在此添加：
 #
 # pod_kubelet_override: []
 
 # --- KubeVirt 节点（group_vars/kubevirt.yaml）---
-# 预设（defaults.cluster.kubelet.kubevirt）已经包含：
+# 默认：空 —— 你在此定义完整列表。VM CPU 绑核 + NUMA 对齐的推荐起点
+# （只影响 Guaranteed QoS 的 Pod/VM；普通 Pod 仍可调度）：
+#
+# kubevirt_kubelet_override:
 #   - cpu-manager-policy=static
 #   - topology-manager-policy=restricted
 #   - feature-gates=CPUManagerPolicyAlphaOptions=true
 #   - cpu-manager-policy-options=distribute-cpus-across-numa=true
-# 不要在这里重复这 4 项 —— 它们会被渲染两次，kubelet 会看到重复值。
-# 只填写【额外追加】的参数：
-#
-# kubevirt_kubelet_override:
 #   - reserved-cpus=4
 #   # - memory-manager-policy=Static
 #   # - system-reserved=memory=4Gi
 #   # - kube-reserved=memory=4Gi
 #   # - reserved-memory=0:memory=1Gi;1:memory=1Gi;2:memory=1Gi;3:memory=1Gi;4:memory=1Gi;5:memory=1Gi;6:memory=1Gi;7:memory=1Gi
+#
+# 如果不想用 static 策略，换一组 args 即可：
+# kubevirt_kubelet_override:
+#   - cpu-manager-policy=none
+
 
 # --- 单机级（host_vars/<node>.yaml）---
 # 追加到上面的组级 override（不替换）。

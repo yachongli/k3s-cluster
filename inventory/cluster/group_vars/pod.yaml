@@ -7,11 +7,11 @@
 # (cpuManagerPolicy=none, topologyManagerPolicy=none).
 #
 # The kubelet-arg list is auto-built in roles/k3s/tasks/facts.yaml:
-#   common_args + pod preset (empty) + pod_kubelet_override
-#                                      + pod_kubelet_override_host
+#   common_args + pod_kubelet_override + pod_kubelet_override_host
 #
-# To add args for ALL pod nodes, set `pod_kubelet_override` here.
-# Entries are appended verbatim — no validation.
+# No preset — pod_kubelet_override IS the full group-specific list.
+# To add args for ALL pod nodes, set `pod_kubelet_override` here or
+# in globals.yaml. Entries are appended verbatim.
 #
 # Example — enable static CPU pinning for high-performance Pod workloads
 # (databases, ML inference) on every pod node:

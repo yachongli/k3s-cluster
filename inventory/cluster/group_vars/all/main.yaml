@@ -119,36 +119,31 @@ defaults:
     # Only enable this if you want Cilium to actively evict foreign CNI files.
     # Override with `cilium_cni_exclusive: true|false`.
     cni_exclusive: '{{ cilium_cni_exclusive | default(false) }}'
-    # -- Kubelet advanced tuning. kubelet-arg is built from three parts:
+    # -- Kubelet advanced tuning. kubelet-arg is built from two parts:
     #   1. common_args — always present (shared by all nodes)
-    #   2. preset      — auto-selected by group membership:
-    #                       pod group      → defaults.cluster.kubelet.pod
-    #                       kubevirt group → defaults.cluster.kubelet.kubevirt
-    #   3. override    — two-level, so host_vars ADDS to (not replaces)
+    #   2. override    — two-level, so host_vars ADDS to (not replaces)
     #                    the group-level override:
     #                       pod nodes:      pod_kubelet_override      (group_vars/pod.yaml)
     #                                      + pod_kubelet_override_host (host_vars/<node>.yaml)
     #                       kubevirt nodes: kubevirt_kubelet_override      (group_vars/kubevirt.yaml)
     #                                      + kubevirt_kubelet_override_host (host_vars/<node>.yaml)
+    # No per-group preset — the override IS the full group-specific list,
+    # giving you complete control (e.g. kubevirt with cpu-manager-policy=none).
+    # Recommended starting points are documented in globals-sample.yaml.
     # All entries are raw strings rendered verbatim into kubelet-arg:.
-    # No relationship validation — kubelet handles conflicts (last wins).
+    # | unique removes exact duplicates (same key=value); different values
+    # for the same key are kept — kubelet resolves via "last wins".
     kubelet:
       # -- Common kubelet args (always present, all nodes)
       common_args:
         - runtime-request-timeout=15m
         - container-log-max-files=3
         - container-log-max-size=10Mi
-      # -- Pod worker preset (no CPU/memory pinning).
-      # Empty by default — kubelet uses its built-in defaults.
+      # -- Pod worker preset. Empty — use pod_kubelet_override to set args.
       pod: []
-      # -- KubeVirt worker preset (static CPU + restricted topology for VM
-      # CPU pinning with NUMA alignment). Pods can still schedule here —
-      # static/restricted policies only affect Guaranteed QoS pods/VMs.
-      kubevirt:
-        - cpu-manager-policy=static
-        - topology-manager-policy=restricted
-        - feature-gates=CPUManagerPolicyAlphaOptions=true
-        - cpu-manager-policy-options=distribute-cpus-across-numa=true
+      # -- KubeVirt worker preset. Empty — use kubevirt_kubelet_override
+      # to set args. See globals-sample.yaml for recommended starting point.
+      kubevirt: []
     # -- Pod resource tiers. All roles reference these instead of hardcoding.
     # Override via `cluster_pod_resources` in globals.yaml to scale at once.
     # Sized for bare-metal servers (96-core / 512GB+ class).

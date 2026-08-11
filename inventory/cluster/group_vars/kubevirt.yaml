@@ -6,17 +6,18 @@
 # These nodes may run KubeVirt VMs.
 #
 # The kubelet-arg list is auto-built in roles/k3s/tasks/facts.yaml:
-#   common_args + kubevirt preset + kubevirt_kubelet_override
-#                                  + kubevirt_kubelet_override_host
+#   common_args + kubevirt_kubelet_override
+#                + kubevirt_kubelet_override_host
 #
-# The kubevirt preset (defined in group_vars/all/main.yaml) enables:
-#   cpu-manager-policy=static
-#   topology-manager-policy=restricted
-#   feature-gates=CPUManagerPolicyAlphaOptions=true
-#   cpu-manager-policy-options=distribute-cpus-across-numa=true
+# There is NO preset — kubevirt_kubelet_override IS the full
+# group-specific list. You have complete control (e.g. kubevirt with
+# cpu-manager-policy=none). Recommended starting point for VM CPU
+# pinning with NUMA alignment is in globals-sample.yaml.
 #
-# To add args for ALL kubevirt nodes, set `kubevirt_kubelet_override` here.
-# Entries are appended verbatim — no validation, kubelet handles conflicts.
+# To add args for ALL kubevirt nodes, set `kubevirt_kubelet_override`
+# here or in globals.yaml. Entries are appended verbatim — | unique
+# removes exact duplicates; different values for the same key are
+# kept (kubelet: last wins).
 # Example — reserve CPU 0 for system daemons on every kubevirt node:
 #   kubevirt_kubelet_override:
 #     - reserved-cpus=0
@@ -36,7 +37,7 @@
 #   1. cordon + drain the node:
 #        kubectl cordon <node> && kubectl drain <node> --ignore-daemonsets
 #   2. Move the host entry in hosts.yaml between groups
-#   3. Re-run: ansible-playbook provisioning.yaml -t k3s
+#   3. Re-run: ansible-playbook provisioning.yaml -t kubernetes
 #   4. uncordon:
 #        kubectl uncordon <node>
 # kubelet will restart with the new args; running workloads are evicted
