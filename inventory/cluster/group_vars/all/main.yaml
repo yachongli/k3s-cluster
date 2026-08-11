@@ -28,6 +28,39 @@ _apt_environment: >-
     _proxy_environment if (cluster_apt_proxy | default(false) | bool) else {}
   }}
 
+# -- Default externaldns vars/project. Used when enable_external_dns: false,
+# so that other roles (victoria-metrics, victoria-logs, cilium, longhorn,
+# argo-cd) can reference externaldns_vars.cloudflare.host.domain and
+# externaldns_project.cloudflare.cluster.issuer without crashing.
+# When external-dns role runs, its set_fact overrides externaldns_project
+# (set_fact > group_vars). externaldns_vars uses the same expressions as
+# roles/external-dns/defaults/main.yaml, so behaviour is identical.
+externaldns_vars:
+  cloudflare:
+    acme:
+      server: '{{ external_dns_acme_server | default(defaults.external_dns.acme_server) }}'
+    host:
+      domain: '{{ external_dns_domain | default(defaults.external_dns.domain) }}'
+    prefix: cloudflare
+  kubernetes:
+    helm:
+      chart:
+        name: external-dns
+        version: '{{ external_dns_chart_version | default("v1.20.0") }}'
+      repository:
+        name: external-dns
+        org: kubernetes-sigs
+        url: https://kubernetes-sigs.github.io
+    log_level: warning
+    namespace: kube-system
+    policy: sync
+    resources: '{{ defaults.cluster.pod_resources.small }}'
+
+externaldns_project:
+  cloudflare:
+    cluster:
+      issuer: ''
+
 # ============================================================
 # Default values for globals.yaml overrides.
 # Single source of truth for all repo baseline values.
