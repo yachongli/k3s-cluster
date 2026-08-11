@@ -67,24 +67,115 @@ Longhorn 部署后在 `kube-system` 和 `longhorn-system` 两个 namespace 中�
 
 ## 3. 工作原理
 
-### 3.1 创建 PVC 全流程
+Longhorn 的卷生命周期分为两个独立阶段：**Provisioning**（创建卷 + 副本）和
+**Attachment**（Pod 调度后创建 Engine 并挂载）。两个阶段可以分开触发，也可以
+连续完成。
+
+> **关键区别**：
+> - PVC 可以**独立创建**，不需要 Pod（只有 Replica，没有 Engine）
+> - Engine 只有在 Pod 需要挂载卷时才创建（因为 iSCSI 要走本地回环）
+
+### 3.1 与 K8s 的依赖关系
+
+Longhorn 是 K8s 原生存储，控制面完全依赖 K8s，数据面独立：
+
+| 层面 | 依赖 K8s？ | 说明 |
+|------|-----------|------|
+| **控制面** | ✅ 完全依赖 | 状态存 etcd（CRD）、变更靠 K8s watch、卷 CRUD 走 CSI → K8s API |
+| **数据面** | ❌ 独立 | iSCSI → Engine → TCP → Replica，直连不走 K8s |
+
+K8s API server 挂了之后：
+
+| 场景 | 能否工作 | 原因 |
+|------|---------|------|
+| 已挂载的卷读写 | ✅ | Engine/Replica 进程已启动，直连 TCP |
+| 副本间数据同步 | ✅ | TCP 直连，不走 K8s |
+| 创建/删除卷 | ❌ | CSI Provisioner 需要 K8s API |
+| Pod 重启后挂载 | ❌ | CSI Attacher 需要 K8s API |
+| 节点故障检测 | ❌ | longhorn-manager 靠 K8s watch 感知 |
+| 副本重建 | ❌ | 需要 longhorn-manager API |
+
+和 Ceph 的本质区别：
+
+```
+Ceph:     控制面 Mon 仲裁（独立 Paxos）   数据面 OSD 间复制   ← 离了 K8s 照跑
+Longhorn: 控制面 = K8s CRD + etcd         数据面 = Engine→Replica TCP   ← 离了 K8s 控制面全瘫
+```
+
+### 3.2 阶段 1：Provisioning（创建卷，不需要 Pod）
+
+PVC 可以独立创建——只要有 CSI Provisioner 和 longhorn-manager 在运行：
 
 ```mermaid
 flowchart TD
     PVC["用户创建 PVC<br/>StorageClass=longhorn, size=50Gi"]
-    S1["1. K8s 调度器决定 Pod → k8s-test-2<br/>kubelet 发现 Pod 需要 PVC"]
-    S2["2. CSI Provisioner → longhorn-csi-plugin<br/>创建一个 50Gi 的卷，2 副本"]
-    S3["3. longhorn-manager 调度副本"]
-    S3F["筛选条件（按顺序）：<br/>① 节点是否 cordon/drain？<br/>② 节点是否有 longhorn 磁盘？<br/>③ 磁盘空间是否足够？<br/>④ replica_node_tag 是否匹配？<br/>⑤ data_locality=best-effort<br/>⑥ replica_auto_balance=least-effort"]
-    S3R["结果：<br/>Replica-1 → k8s-test-2（Pod 同节点）<br/>Replica-2 → k8s-test-1（另一节点）"]
-    S4["4. longhorn-manager 创建 Engine<br/>Engine 固定在 Pod 所在节点（k8s-test-2）<br/>iSCSI target 必须和 Pod 同节点（本地回环）"]
-    S5["5. CSI Attacher 挂载卷<br/>iSCSI initiator → iSCSI target (Engine)<br/>→ /dev/disk/by-path/... → Pod 容器"]
+    CSI["CSI Provisioner<br/>独立控制器, watch PVC"]
+    PLUGIN["longhorn-csi-plugin<br/>DaemonSet, 每节点一个"]
+    MGR["longhorn-manager<br/>DaemonSet, 每节点一个"]
+    CRD["Volume CRD<br/>写入 etcd"]
+    SCHED["longhorn-manager 调度副本"]
+    FILTER["筛选条件（按顺序）：<br/>① 节点是否 cordon/drain？<br/>② 节点是否有 longhorn 磁盘？<br/>③ 磁盘空间是否足够？<br/>④ replica_node_tag 是否匹配？<br/>⑤ replica_auto_balance=least-effort"]
+    RESULT["结果（此时还不知道 Pod 在哪）：<br/>Replica-1 → k8s-test-1<br/>Replica-2 → k8s-test-2"]
+    REP["longhorn-manager 在各节点<br/>创建 Replica 进程（instance-manager 内）"]
+    PV["创建 PV, PVC = Bound<br/>Volume 状态 = created<br/>⚠️ 此时没有 Engine"]
 
-    PVC --> S1 --> S2 --> S3
-    S3 --> S3F --> S3R --> S4 --> S5
+    PVC --> CSI --> PLUGIN --> MGR --> CRD --> SCHED --> FILTER --> RESULT --> REP --> PV
 ```
 
-### 3.2 写入数据路径
+此时卷已创建、副本已分布、PVC 已 Bound，但**没有 Engine**，不能读写。
+`data_locality=best-effort` 的"优先 Pod 同节点"逻辑在这个阶段不生效——
+因为 Pod 还没被调度，不知道放哪个节点。
+
+### 3.3 阶段 2：Attachment（Pod 调度后创建 Engine 并挂载）
+
+当 Pod 被调度到某节点后，kubelet 触发挂载流程：
+
+```mermaid
+flowchart TD
+    SCHED["K8s 调度器决定 Pod → k8s-test-2"]
+    KUBELET["kubelet 发现 Pod 需要 PVC"]
+    ATT["CSI Attacher<br/>调用 longhorn → 'attach'"]
+    MGR["longhorn-manager (k8s-test-2)<br/>在 Pod 所在节点创建 Engine"]
+    RELOC["可能触发副本迁移：<br/>data_locality=best-effort →<br/>在 k8s-test-2 上创建/迁移一个 Replica"]
+    ENG["Engine 创建完成 (iSCSI target)<br/>固定在 k8s-test-2（本地回环）"]
+    ISI["iSCSI initiator (内核)<br/>连接本地 Engine"]
+    MOUNT["→ /dev/disk/by-path/...<br/>→ 挂载到 Pod 容器"]
+    READY["Pod 启动, 卷可读写"]
+
+    SCHED --> KUBELET --> ATT --> MGR --> RELOC --> ENG --> ISI --> MOUNT --> READY
+```
+
+**两个阶段的时间线对比：**
+
+```
+时间 ──────────────────────────────────────────────────────►
+
+阶段 1 (Provisioning)          阶段 2 (Attachment)
+─────────────────────          ──────────────────────
+PVC 创建                        Pod 调度到节点
+  │                               │
+  ▼                               ▼
+CSI Provisioner                 kubelet 触发
+  │                               │
+  ▼                               ▼
+longhorn-manager                CSI Attacher
+  │                               │
+  ▼                               ▼
+创建 Volume CRD                 longhorn-manager
+  │                               │
+  ▼                               ▼
+选节点, 创建 Replica             创建 Engine (Pod 节点)
+  │                               │
+  ▼                               ▼
+PV 创建, PVC Bound              iSCSI 挂载, Pod 启动
+
+  ← 可能间隔几秒到几天 →
+```
+
+> 如果 Pod 和 PVC 同时创建（如 Helm chart 部署），两个阶段会连续完成，
+> 看起来像一个流程。但内部仍然是两步。
+
+### 3.4 写入数据路径
 
 ```mermaid
 flowchart TD
@@ -109,7 +200,7 @@ flowchart TD
 - 同步复制：Engine 等所有 Replica 确认后才回复 Pod
 - 写性能 = 最慢的 Replica 的响应时间
 
-### 3.3 读取数据路径
+### 3.5 读取数据路径
 
 ```mermaid
 flowchart LR
