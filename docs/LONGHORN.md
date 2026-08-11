@@ -42,16 +42,26 @@ Longhorn 是专为 Kubernetes 设计的**分布式块存储**（Distributed Bloc
 
 Longhorn 部署后在 `kube-system` 和 `longhorn-system` 两个 namespace 中运行：
 
-### kube-system（数据面）
+### kube-system
 
 | 组件 | 类型 | 每节点 | 作用 |
 |------|------|--------|------|
 | **longhorn-manager** | DaemonSet | ✅ | 大脑：管理卷 CRUD、副本调度、节点监控 |
-| **longhorn-csi-plugin** | DaemonSet | ✅ | 翻译器：对接 K8s CSI，把 PVC 请求翻译成 Longhorn API |
-| **longhorn-driver-deployer** | Deployment | 1 | 安装器：部署 CSI 侧车组件 |
+| **longhorn-csi-plugin** | DaemonSet | ✅ | CSI 驱动：实现 CSI gRPC 接口，含 3 个容器（plugin + node-driver-registrar + liveness-probe） |
+| **csi-provisioner** | Deployment | 1 | CSI 侧车：watch PVC → 调用 csi-plugin 的 CreateVolume |
+| **csi-attacher** | Deployment | 1 | CSI 侧车：watch VolumeAttachment → 调用 csi-plugin 的 ControllerPublishVolume |
+| **csi-snapshotter** | Deployment | 1 | CSI 侧车：watch VolumeSnapshot → 调用 csi-plugin 的 CreateSnapshot |
+| **csi-resizer** | Deployment | 1 | CSI 侧车：watch PVC resize → 调用 csi-plugin 的 ControllerExpandVolume |
+| **longhorn-driver-deployer** | Deployment | 1 | 安装器：部署上述 CSI 侧车组件 |
 | **longhorn-ui** | Deployment | 2 | Web 管理界面 |
 
-### longhorn-system（控制面）
+> CSI 侧车用标准镜像（如 `longhornio/csi-provisioner:v5.3.0`），通过 hostPath
+> 挂载 `/var/lib/kubelet/plugins/driver.longhorn.io/csi.sock` 连接同节点的
+> csi-plugin。pod 名不带 `longhorn-` 前缀，但用 Longhorn 的 service account
+> 和 socket。集群里可以有多组同名 csi-provisioner（每个 CSI 驱动一组），
+> 靠 StorageClass 的 `provisioner` 字段区分。
+
+### longhorn-system
 
 | 组件 | 作用 |
 |------|------|
@@ -76,54 +86,59 @@ Longhorn chart 创建了 4 个 Service，用于组件间通信：
 
 ### CSI 三层调用架构
 
-Longhorn 遵循标准 CSI 规范，有三层调用关系：
+Longhorn 遵循标准 CSI 规范。CSI 侧车和 kubelet 都通过**本地 Unix socket**
+连接 csi-plugin，csi-plugin 再通过 K8s Service 连接 longhorn-manager：
 
 ```mermaid
 flowchart TD
-    subgraph CSI["CSI 侧车 (Deployments, 全局唯一)"]
+    subgraph SIDECARS["CSI 侧车 (Deployments, kube-system, 全局唯一)"]
         PROV["csi-provisioner<br/>watch PVC → CreateVolume"]
-        ATT["csi-attacher<br/>watch VolumeAttachment → ControllerPublishVolume"]
-        SNAP["csi-snapshotter<br/>watch VolumeSnapshot → CreateSnapshot"]
-        RES["csi-resizer<br/>watch PVC resize → ControllerExpandVolume"]
+        ATT["csi-attacher<br/>watch VolumeAttachment"]
+        SNAP["csi-snapshotter<br/>watch VolumeSnapshot"]
+        RES["csi-resizer<br/>watch PVC resize"]
     end
 
-    subgraph PLUGIN["longhorn-csi-plugin (DaemonSet, 每节点)"]
-        CSICTL["Controller Service<br/>CreateVolume / DeleteVolume / ..."]
-        CSINODE["Node Service<br/>NodePublishVolume / ..."]
+    subgraph DAEMON["longhorn-csi-plugin (DaemonSet, 每节点)"]
+        SOCK["csi.sock<br/>Unix socket<br/>/var/lib/kubelet/plugins/<br/>driver.longhorn.io/"]
+        CSICTL["Controller Service<br/>CreateVolume / DeleteVolume"]
+        CSINODE["Node Service<br/>NodePublishVolume"]
     end
 
     subgraph MGR["longhorn-manager (DaemonSet, 每节点)"]
-        API["Longhorn API<br/>创建卷/副本/引擎"]
-        INST["instance-manager<br/>管理 engine/replica 进程"]
+        API["Longhorn API"]
     end
 
-    subgraph K8SNODE["kubelet (本地)"]
-        KUB["Pod 需要 PVC<br/>→ NodePublishVolume"]
+    subgraph K8SNODE["kubelet (每节点)"]
+        KUB["Pod 需要 PVC"]
     end
 
-    PROV -- "gRPC over<br/>K8s Service<br/>(非本地, 负载均衡)" --> CSICTL
-    ATT -- "gRPC over<br/>K8s Service" --> CSICTL
-    SNAP -- "gRPC over<br/>K8s Service" --> CSICTL
-    RES -- "gRPC over<br/>K8s Service" --> CSICTL
+    PROV -- "本地 Unix socket<br/>(hostPath 挂载)" --> SOCK
+    ATT -- "本地 Unix socket" --> SOCK
+    SNAP -- "本地 Unix socket" --> SOCK
+    RES -- "本地 Unix socket" --> SOCK
 
-    KUB -- "gRPC over<br/>本地 Unix socket<br/>(必须本地)" --> CSINODE
+    KUB -- "本地 Unix socket" --> SOCK
 
-    CSICTL -- "HTTP →<br/>longhorn-backend:9500" --> API
-    CSINODE -- "HTTP →<br/>longhorn-backend:9500" --> API
-    API --> INST
+    SOCK --> CSICTL
+    SOCK --> CSINODE
+
+    CSICTL -- "HTTP<br/>longhorn-backend:9500<br/>(K8s Service, 负载均衡)" --> API
+    CSINODE -- "HTTP<br/>longhorn-backend:9500" --> API
 ```
 
-**三种调用方式对比：**
+**调用方式说明：**
 
-| 调用方 → 被调用方 | 通信方式 | 本地？ | 用途 |
-|-------------------|---------|--------|------|
-| CSI 侧车 → csi-plugin | gRPC over K8s Service | ❌ 负载均衡到任意节点 | 卷级操作（创建/删除/扩容/快照） |
-| kubelet → csi-plugin | gRPC over Unix socket | ✅ 必须本地 | 节点级操作（挂载/卸载） |
-| csi-plugin → longhorn-manager | HTTP over longhorn-backend:9500 | ❌ 负载均衡到任意 manager | 所有 Longhorn API 调用 |
+| 调用方 → 被调用方 | 通信方式 | 说明 |
+|-------------------|---------|------|
+| CSI 侧车 → csi-plugin | 本地 Unix socket (hostPath) | csi-provisioner 等是 Deployment，跑在某个节点上，连接该节点的 csi-plugin |
+| kubelet → csi-plugin | 本地 Unix socket | kubelet 每节点都有，连接本节点的 csi-plugin |
+| csi-plugin → longhorn-manager | HTTP over longhorn-backend:9500 | 唯一走 K8s Service 的环节，负载均衡到任意 manager |
 
-> **关键**：CSI 侧车（provisioner 等）不调用"本地"的 csi-plugin，而是通过 K8s Service
-> 负载均衡到任意节点上的 csi-plugin。只有 kubelet 调用的是本地的 csi-plugin
-> （通过 Unix socket），因为 NodePublishVolume 必须在 Pod 所在节点执行。
+> **CSI 侧车不是 K8s 核心组件**：csi-provisioner、csi-attacher 等是 Longhorn
+> chart 通过 longhorn-driver-deployer 部署的外部 Pod。它们用标准 CSI 侧车
+> 镜像（如 `longhornio/csi-provisioner:v5.3.0`），连接 Longhorn 的 socket。
+> 集群里可以有多组 csi-provisioner（每个 CSI 驱动一组），靠 StorageClass
+> 的 `provisioner` 字段区分（Longhorn = `driver.longhorn.io`）。
 
 ---
 
