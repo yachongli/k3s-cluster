@@ -34,18 +34,21 @@
           #   pod node      → pod_kubelet_override (group) + pod_kubelet_override_host (host)
           #   kubevirt node → kubevirt_kubelet_override (group) + kubevirt_kubelet_override_host (host)
           # All entries are raw strings rendered verbatim into kubelet-arg:.
-          # No validation of relationships — kubelet handles conflicts (last wins).
+          # | unique removes exact duplicates (same key=value) so users can
+          # safely repeat preset items in their override without getting
+          # doubled entries. Different values for the same key are kept
+          # — kubelet resolves conflicts via "last wins".
           args: >-
             {%- if inventory_hostname in (groups.kubevirt | default([])) -%}
-            {{- defaults.cluster.kubelet.common_args
+            {{- (defaults.cluster.kubelet.common_args
                 + defaults.cluster.kubelet.kubevirt
                 + (kubevirt_kubelet_override | default([]))
-                + (kubevirt_kubelet_override_host | default([])) -}}
+                + (kubevirt_kubelet_override_host | default([]))) | unique -}}
             {%- else -%}
-            {{- defaults.cluster.kubelet.common_args
+            {{- (defaults.cluster.kubelet.common_args
                 + defaults.cluster.kubelet.pod
                 + (pod_kubelet_override | default([]))
-                + (pod_kubelet_override_host | default([])) -}}
+                + (pod_kubelet_override_host | default([]))) | unique -}}
             {%- endif -%}
         sysctl_parameters:
           fs.file-max: 1048576

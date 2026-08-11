@@ -462,15 +462,16 @@ enable_gpu_operator: false
 # pod_kubelet_override: []
 
 # --- KubeVirt workers (group_vars/kubevirt.yaml) ---
-# Preset already enables static CPU + restricted topology. Add per-group
-# args here (applies to all kubevirt nodes):
-#
-# kubevirt_kubelet_override:
+# Preset (defaults.cluster.kubelet.kubevirt) ALREADY includes:
 #   - cpu-manager-policy=static
 #   - topology-manager-policy=restricted
-#   - reserved-cpus=4
 #   - feature-gates=CPUManagerPolicyAlphaOptions=true
 #   - cpu-manager-policy-options=distribute-cpus-across-numa=true
+# Do NOT repeat those here — they'd be rendered twice and kubelet would
+# see duplicates. Put only ADDITIONAL args below:
+#
+# kubevirt_kubelet_override:
+#   - reserved-cpus=4
 #   # - memory-manager-policy=Static
 #   # - system-reserved=memory=4Gi
 #   # - kube-reserved=memory=4Gi

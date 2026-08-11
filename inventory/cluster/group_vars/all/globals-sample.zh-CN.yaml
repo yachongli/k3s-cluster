@@ -449,15 +449,16 @@ enable_gpu_operator: false
 # pod_kubelet_override: []
 
 # --- KubeVirt 节点（group_vars/kubevirt.yaml）---
-# 预设已启用 static CPU + restricted topology。在此添加组级
-# 参数（作用于所有 kubevirt 节点）：
-#
-# kubevirt_kubelet_override:
+# 预设（defaults.cluster.kubelet.kubevirt）已经包含：
 #   - cpu-manager-policy=static
 #   - topology-manager-policy=restricted
-#   - reserved-cpus=4
 #   - feature-gates=CPUManagerPolicyAlphaOptions=true
 #   - cpu-manager-policy-options=distribute-cpus-across-numa=true
+# 不要在这里重复这 4 项 —— 它们会被渲染两次，kubelet 会看到重复值。
+# 只填写【额外追加】的参数：
+#
+# kubevirt_kubelet_override:
+#   - reserved-cpus=4
 #   # - memory-manager-policy=Static
 #   # - system-reserved=memory=4Gi
 #   # - kube-reserved=memory=4Gi
