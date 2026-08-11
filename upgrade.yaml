@@ -1,4 +1,18 @@
 ---
+- name: Load plaintext passwords (overrides vault if present)
+  hosts: all
+  gather_facts: false
+  tags: always
+  tasks:
+    - name: Check for plaintext passwords
+      ansible.builtin.stat:
+        path: /etc/k3s-cluster/passwords.yaml
+      register: plaintext_passwords
+    - name: Load plaintext passwords
+      ansible.builtin.include_vars:
+        file: /etc/k3s-cluster/passwords.yaml
+      when: plaintext_passwords.stat.exists
+
 - name: Playbook Validation
   hosts: localhost
   become: false
@@ -27,7 +41,12 @@
   hosts: cluster
   become: true
   gather_facts: true
+  environment: '{{ _proxy_environment }}'
   tasks:
+    - name: Ensure helm is installed (idempotent)
+      ansible.builtin.import_role:
+        name: helm
+
     - name: Role Upgrade
       ansible.builtin.include_role:
         apply:
@@ -38,4 +57,6 @@
       loop_control:
         loop_var: upgrade
       tags: always
-      when: (upgrade in ansible_run_tags)
+      when:
+        - (upgrade in ansible_run_tags)
+        - (lookup('vars', 'enable_' ~ (upgrade | replace('-', '_')), default=true)) | bool

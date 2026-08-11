@@ -1,4 +1,18 @@
 ---
+- name: Load plaintext passwords (overrides vault if present)
+  hosts: all
+  gather_facts: false
+  tags: always
+  tasks:
+    - name: Check for plaintext passwords
+      ansible.builtin.stat:
+        path: /etc/k3s-cluster/passwords.yaml
+      register: plaintext_passwords
+    - name: Load plaintext passwords
+      ansible.builtin.include_vars:
+        file: /etc/k3s-cluster/passwords.yaml
+      when: plaintext_passwords.stat.exists
+
 - name: Playbook Validation
   hosts: localhost
   become: false
@@ -9,14 +23,15 @@
       ansible.builtin.fail:
         msg: |
           Improper usage of '--tags' flag:
-          {% set invalid_tags = ansible_run_tags | difference(global_map.tags.play) %}
+          {% set valid_tags = global_map.tags.play + global_map.tags.charts %}
+          {% set invalid_tags = ansible_run_tags | difference(valid_tags) %}
           {% if invalid_tags | length > 0 %}
             - invalid tag{% if invalid_tags | length > 1 %}s{% endif %}: {{ invalid_tags | join(', ') }}
           {% endif %}
-            - valid tags: {{ global_map.tags.play | join(', ') }}
+            - valid tags: {{ valid_tags | join(', ') }}
       when:
         - ansible_run_tags not in [(), ('all',)]
-        - ansible_run_tags | difference(global_map.tags.play) | length > 0
+        - ansible_run_tags | difference(global_map.tags.play + global_map.tags.charts) | length > 0
 
     - name: Validate version
       ansible.builtin.fail:
@@ -27,6 +42,7 @@
   hosts: cluster
   become: true
   gather_facts: true
+  environment: '{{ _proxy_environment }}'
   roles:
     - cluster
   tags: cluster
@@ -35,6 +51,7 @@
   hosts: cluster
   become: true
   gather_facts: true
+  environment: '{{ _proxy_environment }}'
   tags:
     - cluster
     - kubernetes
@@ -48,6 +65,7 @@
   hosts: cluster
   become: true
   gather_facts: true
+  environment: '{{ _proxy_environment }}'
   roles:
     - helm
     - k3s
@@ -61,32 +79,42 @@
   hosts: server
   become: true
   gather_facts: true
-  post_tasks:
-    - name: Perform post-install tasks
-      ansible.builtin.include_role:
-        name: '{{ postinstall }}'
-        tasks_from: postinstall
-      loop:
-        - argo-cd
-        - cert-manager
-        - cilium
-        - coredns
-        - external-dns
-        - kured
-        - longhorn
-        - metrics-server
-        - victoria-logs
-      loop_control:
-        loop_var: postinstall
-  roles:
+  environment: '{{ _proxy_environment }}'
+  tags:
+    - charts
     - cilium
+    - multus
+    - kube-ovn
     - coredns
     - cert-manager
     - external-dns
     - argo-cd
     - kured
     - longhorn
+    - ceph-csi
     - metrics-server
     - victoria-logs
     - victoria-metrics
-  tags: charts
+    - kubevirt
+    - gpu-operator
+  tasks:
+    - name: Deploy chart roles
+      ansible.builtin.include_role:
+        name: '{{ role }}'
+      loop: '{{ global_map.tags.charts }}'
+      when:
+        - (lookup('vars', 'enable_' ~ (role | replace('-', '_')), default=true)) | bool
+        - (ansible_run_tags in [(), ('all',)]) or (role in ansible_run_tags)
+      loop_control:
+        loop_var: role
+  post_tasks:
+    - name: Perform post-install tasks
+      ansible.builtin.include_role:
+        name: '{{ postinstall }}'
+        tasks_from: postinstall
+      loop: '{{ global_map.tags.postinstall }}'
+      when:
+        - (lookup('vars', 'enable_' ~ (postinstall | replace('-', '_')), default=true)) | bool
+        - (ansible_run_tags in [(), ('all',)]) or (postinstall in ansible_run_tags)
+      loop_control:
+        loop_var: postinstall

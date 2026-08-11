@@ -1,4 +1,18 @@
 ---
+- name: Load plaintext passwords (overrides vault if present)
+  hosts: all
+  gather_facts: false
+  tags: always
+  tasks:
+    - name: Check for plaintext passwords
+      ansible.builtin.stat:
+        path: /etc/k3s-cluster/passwords.yaml
+      register: plaintext_passwords
+    - name: Load plaintext passwords
+      ansible.builtin.include_vars:
+        file: /etc/k3s-cluster/passwords.yaml
+      when: plaintext_passwords.stat.exists
+
 - name: Cluster Reset
   hosts: cluster
   become: true
@@ -20,20 +34,7 @@
       ansible.builtin.include_role:
         name: '{{ reset }}'
         tasks_from: reset
-      loop:
-        - cluster
-        - k3s
-        - argo-cd
-        - cert-manager
-        - cilium
-        - coredns
-        - external-dns
-        - kured
-        - longhorn
-        - metrics-server
-        - victoria-logs
-        - victoria-metrics
-        - helm
+      loop: '{{ global_map.tags.role }}'
       loop_control:
         loop_var: reset
   vars_prompt:
