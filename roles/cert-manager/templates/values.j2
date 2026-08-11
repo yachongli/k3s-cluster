@@ -2,7 +2,25 @@ global:
   leaderElection:
     namespace: {{ certmanager_vars.kubernetes.namespace }}
   logLevel: {{ certmanager_vars.kubernetes.global.log_level }}
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/instance: {{ certmanager_vars.kubernetes.helm.chart.name }}
+          topologyKey: kubernetes.io/hostname
 cainjector:
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchLabels:
+                app.kubernetes.io/instance: {{ certmanager_vars.kubernetes.helm.chart.name }}
+            topologyKey: kubernetes.io/hostname
   podDisruptionBudget:
     enabled: true
     maxUnavailable: 1
@@ -60,6 +78,15 @@ strategy:
     maxUnavailable: 0
   type: RollingUpdate
 webhook:
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchLabels:
+                app.kubernetes.io/instance: {{ certmanager_vars.kubernetes.helm.chart.name }}
+            topologyKey: kubernetes.io/hostname
   podDisruptionBudget:
     enabled: true
     maxUnavailable: 1
