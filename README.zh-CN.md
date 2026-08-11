@@ -171,8 +171,8 @@ ansible-playbook validation.yaml         # 部署前分角色校验
 ansible-playbook provisioning.yaml       # 完整部署
 
 # 按阶段
-ansible-playbook provisioning.yaml -t cluster       # 操作系统 + 防火墙 + kubelet 调优
-ansible-playbook provisioning.yaml -t kubernetes    # K3s + HAProxy + Helm
+ansible-playbook provisioning.yaml -t cluster       # 操作系统 + 防火墙 + 内核模块 + 代理
+ansible-playbook provisioning.yaml -t kubernetes    # K3s + HAProxy + Helm + kubelet 配置
 ansible-playbook provisioning.yaml -t charts        # 所有已启用组件
 
 # 按组件（一个 tag 对应一个 role）
@@ -184,6 +184,60 @@ ansible-playbook provisioning.yaml -t kubevirt
 
 K3s 采用滚动批次启动（`serial: 1 → 2 → 5`），保证第一个 server 先完成 etcd
 选举形成 quorum，其余节点再顺序加入。
+
+### Tag 速查
+
+`provisioning.yaml`（play 级 tag）与 `upgrade.yaml` / `validation.yaml` /
+`reset.yaml`（role 级 tag）的 tag 体系不同。
+
+#### provisioning.yaml — 阶段 tag
+
+| Tag | 覆盖的 play | 配置内容 |
+|-----|------------|---------|
+| `cluster` | Cluster Provisioning + LoadBalancer | OS 层：防火墙、用户、内核模块、sysctl、持久化代理、postfix、自动更新 |
+| `kubernetes` | LoadBalancer + Kubernetes Provisioning | HAProxy + Keepalived VIP、Helm CLI + 插件、K3s server/agent、**kubelet 配置**（`kubelet-arg`）、containerd 镜像加速 |
+| `charts` | Charts Provisioning | 所有已启用的 Helm chart（一次性全跑） |
+| `<component>` | Charts Provisioning | 单个 Helm chart（受 `enable_<component>` 过滤） |
+
+组件 tag（15 个）：
+
+```
+cilium  multus  kube-ovn  coredns  cert-manager  external-dns
+argo-cd  kured  longhorn  ceph-csi  metrics-server
+victoria-logs  victoria-metrics  kubevirt  gpu-operator
+```
+
+#### upgrade.yaml / validation.yaml / reset.yaml — 角色 tag
+
+这三个 playbook 遍历 `global_map.tags.role`，每个 tag 对应一个 role 的
+`upgrade` / `validation` / `reset` 任务文件：
+
+```
+argo-cd  ceph-csi  cert-manager  cilium  cluster  coredns
+external-dns  gpu-operator  helm  k3s  kube-ovn  kubevirt
+kured  longhorn  metrics-server  multus  victoria-logs  victoria-metrics
+```
+
+> **关键区别：** `provisioning.yaml` 用 `kubernetes`（helm + k3s 合在一起）；
+> `upgrade.yaml` / `validation.yaml` 用 `helm` 和 `k3s` 分开跑。`cluster`
+> tag 在 provisioning 中表示 "OS 层"，在 upgrade/validation 中表示
+> "cluster 角色"。
+
+#### 改了配置该跑哪个 tag？
+
+| 我改了… | Playbook | Tag |
+|---------|----------|-----|
+| `kubevirt_kubelet_override` / `pod_kubelet_override` | `provisioning.yaml` | `kubernetes` |
+| `cluster_http_proxy` / OS 级代理 | `provisioning.yaml` | `cluster` |
+| `cilium_lb_ip_start` / chart 值 | `provisioning.yaml` | `<component>` |
+| `k3s_version` | `upgrade.yaml` | `k3s` |
+| `helm_version` / `helm_diff_plugin_version` | `upgrade.yaml` | `helm` |
+| 组件 chart 版本 | `upgrade.yaml` | `<component>` |
+| OS 级设置（postfix、自动更新） | `upgrade.yaml` | `cluster` |
+
+> **`--limit` 注意事项：** 用 `-t kubernetes --limit` 时，必须包含一个
+> server 节点（如 `--limit node1,node2`）。kubelet precheck 会委托 server
+> 节点查询 API，检测是否有运行中的 KubeVirt VM。
 
 ## 升级与重置
 

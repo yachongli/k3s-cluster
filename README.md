@@ -173,8 +173,8 @@ ansible-playbook validation.yaml         # pre-flight checks (per role)
 ansible-playbook provisioning.yaml       # full deploy
 
 # Phase-scoped
-ansible-playbook provisioning.yaml -t cluster       # OS + firewall + kubelet tuning
-ansible-playbook provisioning.yaml -t kubernetes    # K3s + HAProxy + Helm
+ansible-playbook provisioning.yaml -t cluster       # OS + firewall + kernel modules + proxy
+ansible-playbook provisioning.yaml -t kubernetes    # K3s + HAProxy + Helm + kubelet config
 ansible-playbook provisioning.yaml -t charts        # all enabled components
 
 # Component-scoped (one tag = one role)
@@ -186,6 +186,60 @@ Valid component tags: `cilium multus kube-ovn coredns cert-manager external-dns 
 
 K3s bootstraps in rolling batches (`serial: 1 → 2 → 5`) so quorum forms
 correctly on the first server and workers join without racing.
+
+### Tag reference
+
+Tags differ between `provisioning.yaml` (play-level) and
+`upgrade.yaml` / `validation.yaml` / `reset.yaml` (role-level).
+
+#### provisioning.yaml — phase tags
+
+| Tag | Plays it covers | What it configures |
+|-----|-----------------|--------------------|
+| `cluster` | Cluster Provisioning + LoadBalancer | OS layer: firewall, users, kernel modules, sysctl, persistent proxy, postfix, unattended-upgrades |
+| `kubernetes` | LoadBalancer + Kubernetes Provisioning | HAProxy + Keepalived VIP, Helm CLI + plugins, K3s server/agent, **kubelet config** (`kubelet-arg`), containerd registry mirror |
+| `charts` | Charts Provisioning | Every enabled Helm chart in one shot |
+| `<component>` | Charts Provisioning | A single Helm chart (filtered by `enable_<component>`) |
+
+Component tags (15):
+
+```
+cilium  multus  kube-ovn  coredns  cert-manager  external-dns
+argo-cd  kured  longhorn  ceph-csi  metrics-server
+victoria-logs  victoria-metrics  kubevirt  gpu-operator
+```
+
+#### upgrade.yaml / validation.yaml / reset.yaml — role tags
+
+These playbooks loop over `global_map.tags.role`, so each tag maps to one
+role's `upgrade` / `validation` / `reset` task file:
+
+```
+argo-cd  ceph-csi  cert-manager  cilium  cluster  coredns
+external-dns  gpu-operator  helm  k3s  kube-ovn  kubevirt
+kured  longhorn  metrics-server  multus  victoria-logs  victoria-metrics
+```
+
+> **Key difference:** `provisioning.yaml` uses `kubernetes` (helm + k3s
+> together); `upgrade.yaml` / `validation.yaml` use `helm` and `k3s`
+> separately. The `cluster` tag means "OS layer" in provisioning but
+> "cluster role" in upgrade/validation.
+
+#### Which tag do I run?
+
+| I changed… | Playbook | Tag |
+|------------|----------|-----|
+| `kubevirt_kubelet_override` / `pod_kubelet_override` | `provisioning.yaml` | `kubernetes` |
+| `cluster_http_proxy` / OS-level proxy | `provisioning.yaml` | `cluster` |
+| `cilium_lb_ip_start` / chart values | `provisioning.yaml` | `<component>` |
+| `k3s_version` | `upgrade.yaml` | `k3s` |
+| `helm_version` / `helm_diff_plugin_version` | `upgrade.yaml` | `helm` |
+| Component chart version | `upgrade.yaml` | `<component>` |
+| OS-level settings (postfix, unattended-upgrades) | `upgrade.yaml` | `cluster` |
+
+> **`--limit` caveat:** when running `-t kubernetes` with `--limit`, always
+> include a server node (e.g. `--limit node1,node2`). The kubelet precheck
+> delegates API queries to the server to check for running KubeVirt VMs.
 
 ## Upgrade & reset
 
