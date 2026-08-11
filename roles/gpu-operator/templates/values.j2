@@ -1,0 +1,42 @@
+cdi:
+  enabled: {{ gpuoperator_vars.kubernetes.cdi.enabled | lower }}
+{% if gpuoperator_vars.kubernetes.dcgm_exporter.enabled is truthy %}
+dcgmExporter:
+  enabled: true
+{% if gpuoperator_postinstall is truthy and gpuoperator_map.metrics.service.monitor.enabled is truthy %}
+  serviceMonitor:
+    enabled: true
+{% if gpuoperator_map.metrics.service.monitor.scrape.interval is falsy %}
+    interval: {{ victoriametrics_map.service.monitor.scrape.interval }}
+{% else %}
+    interval: {{ gpuoperator_map.metrics.service.monitor.scrape.interval }}
+{% endif %}
+    namespace: {{ victoriametrics_vars.kubernetes.namespace }}
+{% if gpuoperator_map.metrics.service.monitor.scrape.timeout is falsy %}
+    scrapeTimeout: {{ victoriametrics_map.service.monitor.scrape.timeout }}
+{% else %}
+    scrapeTimeout: {{ gpuoperator_map.metrics.service.monitor.scrape.timeout }}
+{% endif %}
+{% endif %}
+{% else %}
+dcgmExporter:
+  enabled: false
+{% endif %}
+driver:
+  enabled: {{ gpuoperator_vars.kubernetes.driver.enabled | lower }}
+{% if gpuoperator_vars.kubernetes.mig.enabled is truthy %}
+migManager:
+  enabled: true
+  config:
+    mig-strategy: {{ gpuoperator_vars.kubernetes.mig.strategy }}
+{% endif %}
+namespace: '{{ gpuoperator_vars.kubernetes.namespace }}'
+nfd:
+  enabled: {{ gpuoperator_vars.kubernetes.nfd.enabled | lower }}
+  nodefeaturerules: {{ gpuoperator_vars.kubernetes.nfd.node_feature_rules | lower }}
+{% if gpuoperator_vars.kubernetes.sandbox_workloads.enabled is truthy %}
+sandboxWorkloads:
+  enabled: true
+  defaultWorkload: container
+  mode: {{ gpuoperator_vars.kubernetes.sandbox_workloads.mode }}
+{% endif %}

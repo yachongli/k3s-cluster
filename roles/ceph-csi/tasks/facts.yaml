@@ -1,0 +1,37 @@
+---
+- name: Set map fact
+  ansible.builtin.set_fact:
+    cephcsi_map:
+      helm:
+        chart:
+          reference: '{{ cephcsi_vars.kubernetes.helm.repository.org }}/{{ cephcsi_vars.kubernetes.helm.chart.name }}'
+          version: '{{ cephcsi_vars.kubernetes.helm.chart.version }}'
+        platform:
+          key: https://github.com
+          raw: https://raw.githubusercontent.com
+        repository:
+          name: '{{ cephcsi_vars.kubernetes.helm.repository.org }}/{{ cephcsi_vars.kubernetes.helm.repository.name }}'
+          url: '{{ cephcsi_vars.kubernetes.helm.repository.url }}'
+        timeout: 10m0s
+      metrics:
+        service:
+          monitor:
+            enabled: true
+            scrape:
+              # If `null`, default value is `victoriametrics_map.service.monitor.scrape.interval`
+              interval: null
+              # If `null`, default value is `victoriametrics_map.service.monitor.scrape.timeout`
+              timeout: null
+  run_once: true
+
+- name: Set project fact
+  ansible.builtin.set_fact:
+    cephcsi_project:
+      tag: 'v{{ cephcsi_vars.kubernetes.helm.chart.version }}'
+      url: '{{ cephcsi_map.helm.platform.key }}/{{ cephcsi_map.helm.repository.name }}/releases/tag'
+  run_once: true
+
+- name: Set variables fact
+  ansible.builtin.set_fact:
+    cephcsi_vars: '{{ cephcsi_vars }}'
+  run_once: true

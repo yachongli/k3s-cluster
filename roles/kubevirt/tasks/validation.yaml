@@ -1,0 +1,87 @@
+---
+- name: Role Facts
+  ansible.builtin.include_role:
+    name: '{{ role }}'
+    tasks_from: facts
+  loop:
+    - k3s
+    - victoria-metrics
+    - kubevirt
+  loop_control:
+    loop_var: role
+
+- name: Role Validation
+  when: (ansible_run_tags in [(), ('all',)]) or ('kubevirt' in ansible_run_tags)
+  run_once: true
+  block:
+    - name: Validate project url
+      ansible.builtin.uri:
+        url: '{{ kubevirt_project.url }}/{{ kubevirt_project.tag }}'
+        timeout: 5
+      register: kubevirt_result
+      delay: 1
+      retries: 3
+      until: kubevirt_result is not failed
+
+    - name: Manifest Validation
+      block:
+        - name: Validate operator manifest url
+          ansible.builtin.uri:
+            url: '{{ kubevirt_project.release.url }}/{{ kubevirt_map.manifest.operator }}'
+            timeout: 5
+          register: kubevirt_result
+          delay: 1
+          retries: 3
+          until: kubevirt_result is not failed
+
+        - name: Validate custom resource manifest url
+          ansible.builtin.uri:
+            url: '{{ kubevirt_project.release.url }}/{{ kubevirt_map.manifest.cr }}'
+            timeout: 5
+          register: kubevirt_result
+          delay: 1
+          retries: 3
+          until: kubevirt_result is not failed
+
+        - name: Set chart postinstall fact
+          ansible.builtin.set_fact:
+            kubevirt_postinstall: false
+
+        - name: Validate custom resource manifest
+          ansible.builtin.debug:
+            msg: "{{ lookup('ansible.builtin.template', 'kubevirt_cr.j2') }}"
+
+        - name: Update chart postinstall fact
+          ansible.builtin.set_fact:
+            kubevirt_postinstall: true
+
+        - name: Validate postinstall service monitor manifest
+          ansible.builtin.debug:
+            msg: "{{ lookup('ansible.builtin.template', 'service_monitor.j2') }}"
+
+        - name: Validate cluster kubeconfig path
+          ansible.builtin.stat:
+            path: '{{ k3s_project.cluster.kubeconfig }}'
+          register: kubevirt_kubeconfig
+          changed_when: false
+
+        - name: Get deployed KubeVirt resource info
+          kubernetes.core.k8s_info:
+            api_version: kubevirt.io/v1
+            kind: KubeVirt
+            name: kubevirt
+            namespace: '{{ kubevirt_vars.kubernetes.namespace }}'
+            kubeconfig: '{{ k3s_project.cluster.kubeconfig }}'
+          register: kubevirt_release
+          when: kubevirt_kubeconfig.stat.exists
+          changed_when: false
+
+        - name: Set comparison fact
+          ansible.builtin.set_fact:
+            kubevirt_comparison:
+              chart: '{{ kubevirt_vars.release.version }}'
+              release: "{{ (kubevirt_release.resources | default([]) | length > 0) | ternary(kubevirt_release.resources[0].status.observedVersion | default('0'), '0') }}"
+
+        - name: Comparison result
+          ansible.builtin.debug:
+            msg: "Deployed version: '{{ kubevirt_comparison.release }}', target version: '{{ kubevirt_comparison.chart }}'"

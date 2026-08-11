@@ -1,0 +1,46 @@
+---
+cephcsi_vars:
+  kubernetes:
+    helm:
+      chart:
+        name: ceph-csi-drivers
+        version: '{{ ceph_csi_chart_version | default("1.0.4") }}'
+      repository:
+        name: ceph-csi-operator
+        org: ceph
+        url: https://ceph.github.io/ceph-csi-operator
+    namespace: ceph-csi
+    # -- External Ceph cluster connection
+    ceph:
+      # -- Name for this Ceph connection (used in CR names)
+      connection_name: external
+      # -- Ceph monitor addresses (list of IP:port)
+      monitors: '{{ ceph_csi_monitors | default(defaults.ceph_csi.monitors) }}'
+      # -- Cephx client user name (e.g. "admin", "kube")
+      client_user: '{{ ceph_csi_client_user | default(defaults.ceph_csi.client_user) }}'
+      # -- RBD pool name for block storage
+      rbd_pool: '{{ ceph_csi_rbd_pool | default(defaults.ceph_csi.rbd_pool) }}'
+      # -- CephFS filesystem name (leave empty to disable CephFS)
+      cephfs_fsname: '{{ ceph_csi_cephfs_fsname | default(defaults.ceph_csi.cephfs_fsname) }}'
+    # -- Cephx client key (base64-encoded). Stored in a Kubernetes Secret.
+    # Generate with: ceph auth get-key client.admin | base64
+    # Set via passwords.yaml as credential_ceph_admin_key
+    client_key_secret: ceph-admin-key
+    # -- StorageClass names created by this role
+    storage_class:
+      rbd: ceph-rbd
+      cephfs: ceph-cephfs
+    # -- Driver enable flags
+    drivers:
+      rbd:
+        enabled: true
+      cephfs:
+        enabled: '{{ ceph_csi_cephfs_enabled | default(defaults.ceph_csi.cephfs_enabled) }}'
+    monitoring:
+      service_monitor:
+        enabled: true
+        scrape:
+          # If `null`, default value is `victoriametrics_map.service.monitor.scrape.interval`
+          interval: null
+          # If `null`, default value is `victoriametrics_map.service.monitor.scrape.timeout`
+          timeout: null

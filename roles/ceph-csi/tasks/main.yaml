@@ -1,0 +1,91 @@
+---
+- name: Role Facts
+  ansible.builtin.include_role:
+    name: '{{ role }}'
+    tasks_from: facts
+  loop:
+    - k3s
+    - victoria-metrics
+    - ceph-csi
+  loop_control:
+    loop_var: role
+
+- name: Role Provisioning
+  when: inventory_hostname in k3s_map.server.hosts
+  block:
+    - name: Validate service state
+      ansible.builtin.wait_for:
+        port: '{{ k3s_vars.server.api.port }}'
+        timeout: 30
+      any_errors_fatal: true
+
+    - name: Add repository
+      kubernetes.core.helm_repository:
+        name: '{{ cephcsi_vars.kubernetes.helm.repository.org }}'
+        repo_url: '{{ cephcsi_map.helm.repository.url }}'
+        force_update: true
+      register: cephcsi_result
+      delay: 1
+      retries: 3
+      until: cephcsi_result is not failed
+
+    - name: Chart Setup
+      run_once: true
+      block:
+        - name: Set chart postinstall fact
+          ansible.builtin.set_fact:
+            cephcsi_postinstall: false
+
+        - name: Create cephx client key secret
+          kubernetes.core.k8s:
+            definition: "{{ lookup('ansible.builtin.template', 'secret.j2') | from_yaml }}"
+            kubeconfig: '{{ k3s_project.cluster.kubeconfig }}'
+            wait: true
+          no_log: true
+
+        - name: Install chart
+          kubernetes.core.helm:
+            chart_ref: '{{ cephcsi_map.helm.chart.reference }}'
+            chart_version: '{{ cephcsi_vars.kubernetes.helm.chart.version }}'
+            kubeconfig: '{{ k3s_project.cluster.kubeconfig }}'
+            name: '{{ cephcsi_vars.kubernetes.helm.chart.name }}'
+            namespace: '{{ cephcsi_vars.kubernetes.namespace }}'
+            timeout: '{{ cephcsi_map.helm.timeout }}'
+            values: "{{ lookup('ansible.builtin.template', 'values.j2') | from_yaml }}"
+            create_namespace: true
+            update_repo_cache: true
+            wait: true
+          register: cephcsi_result
+          delay: 1
+          retries: 3
+          until: cephcsi_result is not failed
+
+        - name: Wait for ceph-csi-operator rollout
+          kubernetes.core.k8s_info:
+            kind: Deployment
+            name: ceph-csi-operator-controller-manager
+            namespace: '{{ cephcsi_vars.kubernetes.namespace }}'
+            kubeconfig: '{{ k3s_project.cluster.kubeconfig }}'
+            wait: true
+            wait_timeout: 300
+            wait_condition:
+              type: Available
+              status: 'True'
+          register: cephcsi_result
+          delay: 5
+          retries: 30
+          until: cephcsi_result is not failed
+
+        - name: Create RBD StorageClass
+          when: cephcsi_vars.kubernetes.drivers.rbd.enabled is truthy
+          kubernetes.core.k8s:
+            definition: "{{ lookup('ansible.builtin.template', 'storageclass_rbd.j2') | from_yaml }}"
+            kubeconfig: '{{ k3s_project.cluster.kubeconfig }}'
+            wait: true
+
+        - name: Create CephFS StorageClass
+          when: cephcsi_vars.kubernetes.drivers.cephfs.enabled is truthy
+          kubernetes.core.k8s:
+            definition: "{{ lookup('ansible.builtin.template', 'storageclass_cephfs.j2') | from_yaml }}"
+            kubeconfig: '{{ k3s_project.cluster.kubeconfig }}'
+            wait: true

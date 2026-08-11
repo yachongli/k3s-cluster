@@ -1,0 +1,103 @@
+---
+apiVersion: kubevirt.io/v1
+kind: KubeVirt
+metadata:
+  name: kubevirt
+  namespace: {{ kubevirt_vars.kubernetes.namespace }}
+spec:
+  certificateRotateStrategy: {}
+  configuration:
+{% if kubevirt_vars.kubernetes.configuration.developer.feature_gates.enabled is truthy %}
+{% set feature_gates = kubevirt_vars.kubernetes.configuration.developer.feature_gates.entries %}
+{% if feature_gates is iterable and feature_gates is not string %}
+    developerConfiguration:
+      featureGates:
+{% for entry in feature_gates %}
+        - {{ entry }}
+{% endfor %}
+{% else %}
+{% set feature_gates_list = feature_gates | regex_replace("\\[|\\]", "") | split(",") %}
+    developerConfiguration:
+      featureGates:
+{% for entry in feature_gates_list %}
+        - {{ entry | trim | regex_replace("'", "") }}
+{% endfor %}
+{% endif %}
+      useEmulation: {{ kubevirt_vars.kubernetes.configuration.developer.use_emulation | lower }}
+{% endif %}
+    imagePullPolicy: {{ kubevirt_vars.kubernetes.configuration.image_pull_policy }}
+{% if kubevirt_vars.kubernetes.configuration.infra.node_placement.enabled is truthy %}
+    infra:
+      nodePlacement:
+{% if kubevirt_vars.kubernetes.configuration.infra.node_placement.node_selector | length > 0 %}
+        nodeSelector:
+{% for key, value in kubevirt_vars.kubernetes.configuration.infra.node_placement.node_selector.items() %}
+          {{ key | indent(10) }}: {{ value }}
+{% endfor %}
+{% endif %}
+{% if kubevirt_vars.kubernetes.configuration.infra.node_placement.tolerations | length > 0 %}
+        tolerations:
+          {{ kubevirt_vars.kubernetes.configuration.infra.node_placement.tolerations | to_nice_yaml(indent=2) | trim | indent(10) }}
+{% endif %}
+{% endif %}
+{% if kubevirt_vars.kubernetes.configuration.permitted_host_devices.pci_host_devices | length > 0 or kubevirt_vars.kubernetes.configuration.permitted_host_devices.mediated_devices | length > 0 %}
+    permittedHostDevices:
+{% if kubevirt_vars.kubernetes.configuration.permitted_host_devices.pci_host_devices | length > 0 %}
+      pciHostDevices:
+{% for device in kubevirt_vars.kubernetes.configuration.permitted_host_devices.pci_host_devices %}
+      - pciVendorSelector: {{ device.pci_vendor_selector }}
+        resourceName: {{ device.resource_name }}
+        externalResourceProvider: {{ device.external_resource_provider | lower }}
+{% endfor %}
+{% endif %}
+{% if kubevirt_vars.kubernetes.configuration.permitted_host_devices.mediated_devices | length > 0 %}
+      mediatedDevices:
+{% for device in kubevirt_vars.kubernetes.configuration.permitted_host_devices.mediated_devices %}
+      - mdevNameSelector: {{ device.mdev_name_selector }}
+        resourceName: {{ device.resource_name }}
+        externalResourceProvider: {{ device.external_resource_provider | lower }}
+{% endfor %}
+{% endif %}
+{% endif %}
+    network:
+      defaultNetworkInterface: {{ kubevirt_vars.kubernetes.configuration.network.default_network_interface }}
+{% if kubevirt_vars.kubernetes.configuration.network.binding.managedtap.enabled is truthy %}
+      binding:
+        managedtap:
+          domainAttachmentType: {{ kubevirt_vars.kubernetes.configuration.network.binding.managedtap.domain_attachment_type }}
+{% endif %}
+{% if kubevirt_vars.kubernetes.configuration.uninstall_strategy | length > 0 %}
+    uninstallStrategy: {{ kubevirt_vars.kubernetes.configuration.uninstall_strategy }}
+{% endif %}
+{% if kubevirt_vars.kubernetes.configuration.workload_update_strategy.methods | length > 0 %}
+    workloadUpdateStrategy:
+      batchEvictionInterval: {{ kubevirt_vars.kubernetes.configuration.workload_update_strategy.batch_eviction_interval }}
+      batchEvictionSize: {{ kubevirt_vars.kubernetes.configuration.workload_update_strategy.batch_eviction_size }}
+      workloadUpdateMethods:
+{% for method in kubevirt_vars.kubernetes.configuration.workload_update_strategy.methods %}
+        - {{ method }}
+{% endfor %}
+{% endif %}
+{% if kubevirt_vars.kubernetes.configuration.workloads.node_placement.enabled is truthy %}
+    workloads:
+      nodePlacement:
+{% if kubevirt_vars.kubernetes.configuration.workloads.node_placement.node_selector | length > 0 %}
+        nodeSelector:
+{% for key, value in kubevirt_vars.kubernetes.configuration.workloads.node_placement.node_selector.items() %}
+          {{ key | indent(10) }}: {{ value }}
+{% endfor %}
+{% endif %}
+{% if kubevirt_vars.kubernetes.configuration.workloads.node_placement.tolerations | length > 0 %}
+        tolerations:
+          {{ kubevirt_vars.kubernetes.configuration.workloads.node_placement.tolerations | to_nice_yaml(indent=2) | trim | indent(10) }}
+{% endif %}
+{% endif %}
+  customizeComponents:
+{% if kubevirt_vars.kubernetes.configuration.customize_components.patches | length > 0 %}
+    patches:
+      {{ kubevirt_vars.kubernetes.configuration.customize_components.patches | to_nice_yaml(indent=2) | trim | indent(6) }}
+{% else %}
+    patches: []
+{% endif %}
+  imagePullPolicy: {{ kubevirt_vars.kubernetes.configuration.image_pull_policy }}
+  workloadUpdateStrategy: {}

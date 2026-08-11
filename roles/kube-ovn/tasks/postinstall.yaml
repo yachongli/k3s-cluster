@@ -1,0 +1,27 @@
+---
+- name: Role Post-Install
+  when:
+    - inventory_hostname in k3s_map.server.hosts
+    - kubeovn_map.metrics.service.monitor.enabled
+  run_once: true
+  block:
+    - name: Update chart postinstall fact
+      ansible.builtin.set_fact:
+        kubeovn_postinstall: true
+
+    - name: Update chart postinstall values
+      kubernetes.core.helm:
+        chart_ref: '{{ kubeovn_map.helm.chart.reference }}'
+        chart_version: '{{ kubeovn_vars.kubernetes.helm.chart.version }}'
+        kubeconfig: '{{ k3s_project.cluster.kubeconfig }}'
+        name: '{{ kubeovn_vars.kubernetes.helm.chart.name }}'
+        namespace: '{{ kubeovn_vars.kubernetes.namespace }}'
+        timeout: '{{ kubeovn_map.helm.timeout }}'
+        values: "{{ lookup('ansible.builtin.template', 'values.j2') | from_yaml }}"
+        reset_values: false
+        reuse_values: true
+        wait: true
+      register: kubeovn_result
+      delay: 1
+      retries: 3
+      until: kubeovn_result is not failed

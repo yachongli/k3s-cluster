@@ -1,0 +1,47 @@
+---
+gpuoperator_vars:
+  kubernetes:
+    helm:
+      chart:
+        name: gpu-operator
+        version: '{{ gpu_operator_chart_version | default("v26.3.3") }}'
+      repository:
+        name: gpu-operator
+        org: nvidia
+        url: https://nvidia.github.io/gpu-operator
+    namespace: gpu-operator
+    # -- Node Feature Discovery (auto-detect GPU nodes)
+    nfd:
+      enabled: '{{ gpu_operator_nfd_enabled | default(defaults.gpu_operator.nfd_enabled) }}'
+      node_feature_rules: false
+    # -- Container Device Interface (required for KubeVirt GPU passthrough)
+    cdi:
+      enabled: '{{ gpu_operator_cdi_enabled | default(defaults.gpu_operator.cdi_enabled) }}'
+    # -- Sandbox workloads: GPU passthrough to KubeVirt VMs
+    sandbox_workloads:
+      enabled: '{{ gpu_operator_sandbox_workloads_enabled | default(defaults.gpu_operator.sandbox_workloads_enabled) }}'
+      # -- Sandbox mode: "kubevirt" (default) or "kata"
+      mode: '{{ gpu_operator_sandbox_workloads_mode | default(defaults.gpu_operator.sandbox_workloads_mode) }}'
+    # -- Driver installation mode. true = install NVIDIA driver via container
+    # (requires internet access to download driver). false = use host-installed driver.
+    driver:
+      enabled: '{{ gpu_operator_driver_enabled | default(defaults.gpu_operator.driver_enabled) }}'
+    # -- MIG (Multi-Instance GPU) configuration
+    mig:
+      enabled: '{{ gpu_operator_mig_enabled | default(defaults.gpu_operator.mig_enabled) }}'
+      strategy: '{{ gpu_operator_mig_strategy | default(defaults.gpu_operator.mig_strategy) }}'
+    # -- GPU time-slicing (share one GPU across multiple pods)
+    time_slicing:
+      enabled: '{{ gpu_operator_time_slicing_enabled | default(defaults.gpu_operator.time_slicing_enabled) }}'
+      replicas: '{{ gpu_operator_time_slicing_replicas | default(defaults.gpu_operator.time_slicing_replicas) }}'
+    # -- DCGM exporter (GPU metrics for Prometheus/VictoriaMetrics)
+    dcgm_exporter:
+      enabled: '{{ gpu_operator_dcgm_exporter_enabled | default(defaults.gpu_operator.dcgm_exporter_enabled) }}'
+    monitoring:
+      service_monitor:
+        enabled: '{{ defaults.cluster.service_monitor_enabled }}'
+        scrape:
+          # If `null`, default value is `victoriametrics_map.service.monitor.scrape.interval`
+          interval: null
+          # If `null`, default value is `victoriametrics_map.service.monitor.scrape.timeout`
+          timeout: null

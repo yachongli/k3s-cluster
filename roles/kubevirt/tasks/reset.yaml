@@ -1,0 +1,97 @@
+---
+- name: Role Facts
+  ansible.builtin.import_role:
+    name: k3s
+    tasks_from: facts
+
+- name: Role Reset
+  when: inventory_hostname in k3s_map.server.hosts
+  block:
+    - name: Validate cluster kubeconfig path
+      ansible.builtin.stat:
+        path: '{{ k3s_project.cluster.kubeconfig }}'
+      register: kubevirt_kubeconfig
+      changed_when: false
+
+    - name: Remove KubeVirt deployment
+      when: kubevirt_kubeconfig.stat.exists
+      run_once: true
+      block:
+        - name: Remove KubeVirt custom resource
+          kubernetes.core.k8s:
+            api_version: kubevirt.io/v1
+            kind: KubeVirt
+            name: kubevirt
+            namespace: '{{ kubevirt_vars.kubernetes.namespace }}'
+            kubeconfig: '{{ k3s_project.cluster.kubeconfig }}'
+            state: absent
+            wait: true
+            wait_timeout: 300
+          register: kubevirt_result
+          delay: 1
+          retries: 3
+          until: kubevirt_result is not failed
+
+        - name: Wait for KubeVirt operands removal
+          kubernetes.core.k8s_info:
+            kind: Deployment
+            label_selectors:
+              - kubevirt.io
+            namespace: '{{ kubevirt_vars.kubernetes.namespace }}'
+            kubeconfig: '{{ k3s_project.cluster.kubeconfig }}'
+          register: kubevirt_operands
+          retries: 30
+          delay: 5
+          until: kubevirt_operands.resources | length == 0
+          changed_when: false
+
+        - name: Download operator manifest
+          ansible.builtin.get_url:
+            url: '{{ kubevirt_project.release.url }}/{{ kubevirt_map.manifest.operator }}'
+            dest: '{{ k3s_map.node.directory.config }}/kubevirt-operator.yaml'
+            owner: root
+            group: root
+            mode: '600'
+          register: kubevirt_result
+          delay: 1
+          retries: 3
+          until: kubevirt_result is not failed
+
+        - name: Remove operator manifest
+          kubernetes.core.k8s:
+            src: '{{ k3s_map.node.directory.config }}/kubevirt-operator.yaml'
+            kubeconfig: '{{ k3s_project.cluster.kubeconfig }}'
+            state: absent
+            wait: true
+          register: kubevirt_result
+          delay: 1
+          retries: 3
+          until: kubevirt_result is not failed
+
+        - name: Remove KubeVirt namespace
+          kubernetes.core.k8s:
+            kind: Namespace
+            name: '{{ kubevirt_vars.kubernetes.namespace }}'
+            kubeconfig: '{{ k3s_project.cluster.kubeconfig }}'
+            state: absent
+            wait: true
+          register: kubevirt_result
+          delay: 1
+          retries: 3
+          until: kubevirt_result is not failed
+          failed_when: kubevirt_result is failed and 'NotFound' not in kubevirt_result.msg | default('')
+
+    - name: Remove virtctl binary
+      ansible.builtin.file:
+        path: '{{ k3s_map.node.directory.bin }}/virtctl'
+        state: absent
+
+    - name: Remove manifests
+      ansible.builtin.file:
+        path: '{{ k3s_map.node.directory.config }}/{{ file }}'
+        state: absent
+      loop:
+        - kubevirt-operator.yaml
+        - kubevirt-network-policies.yaml
+      loop_control:
+        loop_var: file

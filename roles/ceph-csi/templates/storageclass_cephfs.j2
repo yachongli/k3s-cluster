@@ -1,0 +1,17 @@
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: '{{ cephcsi_vars.kubernetes.storage_class.cephfs }}'
+provisioner: 'cephfs.csi.ceph.com'
+parameters:
+  clusterID: '{{ cephcsi_vars.kubernetes.namespace }}'
+  fsName: '{{ cephcsi_vars.kubernetes.ceph.cephfs_fsname }}'
+  csi.storage.k8s.io/provisioner-secret-name: '{{ cephcsi_vars.kubernetes.client_key_secret }}'
+  csi.storage.k8s.io/provisioner-secret-namespace: '{{ cephcsi_vars.kubernetes.namespace }}'
+  csi.storage.k8s.io/controller-expand-secret-name: '{{ cephcsi_vars.kubernetes.client_key_secret }}'
+  csi.storage.k8s.io/controller-expand-secret-namespace: '{{ cephcsi_vars.kubernetes.namespace }}'
+  csi.storage.k8s.io/node-stage-secret-name: '{{ cephcsi_vars.kubernetes.client_key_secret }}'
+  csi.storage.k8s.io/node-stage-secret-namespace: '{{ cephcsi_vars.kubernetes.namespace }}'
+reclaimPolicy: Delete
+allowVolumeExpansion: true

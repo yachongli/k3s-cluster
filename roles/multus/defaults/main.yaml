@@ -1,0 +1,23 @@
+﻿---
+multus_vars:
+  kubernetes:
+    # -- Namespace where multus DaemonSet runs
+    namespace: '{{ multus_namespace | default(defaults.multus.namespace) }}'
+    # -- CNI config file name (must sort before Cilium's 05-cilium.conflist)
+    cni_config_file: '{{ multus_cni_config_file | default(defaults.multus.cni_config_file) }}'
+    # -- Image configuration
+    image:
+      repository: ghcr.io/k8snetworkplumbingwg/multus-cni
+      tag: '{{ multus_image_tag | default(defaults.multus.image_tag) }}'
+    # -- Resource limits/requests for multus pod
+    # See: https://github.com/k8snetworkplumbingwg/multus-cni/issues/1416
+    # Uses the `cni` tier (200Mi limit / 50Mi request) to avoid OOM on large nodes.
+    resources: '{{ defaults.cluster.pod_resources.small }}'
+    # -- Tolerations: schedule on all nodes (including control-plane)
+    tolerations:
+      - key: node-role.kubernetes.io/control-plane
+        operator: Exists
+        effect: NoSchedule
+      - key: node.cilium.io/agent-not-ready
+        operator: Exists
+        effect: NoExecute

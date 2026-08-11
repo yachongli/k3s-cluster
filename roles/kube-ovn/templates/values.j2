@@ -1,0 +1,35 @@
+{% if kubeovn_postinstall is not defined or not kubeovn_postinstall %}
+cni_conf:
+  CNI_CONFIG_PRIORITY: '{{ kubeovn_vars.kubernetes.cni.config_priority }}'
+  CNI_CONF_DIR: '{{ kubeovn_vars.kubernetes.cni.config_dir }}'
+  CNI_BIN_DIR: '{{ kubeovn_vars.kubernetes.cni.bin_dir }}'
+  NON_PRIMARY_CNI: '{{ kubeovn_vars.kubernetes.non_primary_cni | lower }}'
+{% if not kubeovn_vars.kubernetes.non_primary_cni %}
+  CNI_CONF_FILE: '{{ kubeovn_vars.kubernetes.cni.conf_file }}'
+{% endif %}
+func:
+  ENABLE_LB: '{{ kubeovn_vars.kubernetes.func.enable_lb | lower }}'
+  ENABLE_NP: '{{ kubeovn_vars.kubernetes.func.enable_np | lower }}'
+  ENABLE_NAT_GW: '{{ kubeovn_vars.kubernetes.func.enable_nat_gw | lower }}'
+  ENABLE_KEEP_VM_IP: '{{ kubeovn_vars.kubernetes.func.enable_keep_vm_ip | lower }}'
+{% if kubeovn_vars.kubernetes.networking.net_stack == 'ipv4' %}
+ipv4:
+  POD_CIDR: '{{ kubeovn_vars.kubernetes.networking.pod_cidr }}'
+  POD_GATEWAY: '{{ kubeovn_vars.kubernetes.networking.pod_gateway }}'
+  SVC_CIDR: '{{ kubeovn_vars.kubernetes.networking.svc_cidr }}'
+  JOIN_CIDR: '{{ kubeovn_vars.kubernetes.networking.join_cidr }}'
+{% elif kubeovn_vars.kubernetes.networking.net_stack == 'dual_stack' %}
+dual_stack:
+  POD_CIDR: '{{ kubeovn_vars.kubernetes.networking.pod_cidr }}'
+  POD_GATEWAY: '{{ kubeovn_vars.kubernetes.networking.pod_gateway }}'
+  SVC_CIDR: '{{ kubeovn_vars.kubernetes.networking.svc_cidr }}'
+  JOIN_CIDR: '{{ kubeovn_vars.kubernetes.networking.join_cidr }}'
+{% endif %}
+networking:
+  NET_STACK: '{{ kubeovn_vars.kubernetes.networking.net_stack }}'
+namespace: '{{ kubeovn_vars.kubernetes.namespace }}'
+{% endif %}
+{% if kubeovn_postinstall is truthy and kubeovn_map.metrics.service.monitor.enabled is truthy %}
+monitor:
+  ENABLE_METRICS: true
+{% endif %}

@@ -1,0 +1,45 @@
+---
+- name: Set map fact
+  ansible.builtin.set_fact:
+    kubevirt_map:
+      helm:
+        platform:
+          key: https://github.com
+          raw: https://raw.githubusercontent.com
+      manifest:
+        cr: kubevirt-cr.yaml
+        network_policies: kubevirt-network-policies.yaml
+        operator: kubevirt-operator.yaml
+      metrics:
+        service:
+          monitor:
+            enabled: "{{ defaults.cluster.service_monitor_enabled }}"
+            scrape:
+              # If `null`, default value is `victoriametrics_map.service.monitor.scrape.interval`
+              interval: null
+              # If `null`, default value is `victoriametrics_map.service.monitor.scrape.timeout`
+              timeout: null
+      release:
+        # -- Maps to KubeVirt `virtctl` asset architecture suffix via cluster_map
+        architecture: '{{ cluster_map.architecture.binary | default("amd64") }}'
+  run_once: true
+
+- name: Set project fact
+  ansible.builtin.set_fact:
+    kubevirt_project:
+      release:
+        file: 'virtctl-{{ kubevirt_vars.release.version }}-linux-{{ kubevirt_map.release.architecture }}'
+        url: "{{
+          '/'.join([kubevirt_map.helm.platform.key,
+            kubevirt_vars.release.repository.org,
+            kubevirt_vars.release.repository.name, 'releases', 'download',
+            kubevirt_vars.release.version])
+          }}"
+      tag: '{{ kubevirt_vars.release.version }}'
+      url: '{{ kubevirt_map.helm.platform.key }}/{{ kubevirt_vars.release.repository.org }}/{{ kubevirt_vars.release.repository.name }}/releases/tag'
+  run_once: true
+
+- name: Set variables fact
+  ansible.builtin.set_fact:
+    kubevirt_vars: '{{ kubevirt_vars }}'
+  run_once: true

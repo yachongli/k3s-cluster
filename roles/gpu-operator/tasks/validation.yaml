@@ -1,0 +1,61 @@
+---
+- name: Role Facts
+  ansible.builtin.include_role:
+    name: '{{ role }}'
+    tasks_from: facts
+  loop:
+    - k3s
+    - victoria-metrics
+    - gpu-operator
+  loop_control:
+    loop_var: role
+
+- name: Role Validation
+  when: (ansible_run_tags in [(), ('all',)]) or ('gpu-operator' in ansible_run_tags)
+  run_once: true
+  block:
+    - name: Validate project url
+      ansible.builtin.uri:
+        url: '{{ gpuoperator_project.url }}/{{ gpuoperator_project.tag }}'
+        timeout: 5
+      register: gpuoperator_result
+      delay: 1
+      retries: 3
+      until: gpuoperator_result is not failed
+
+    - name: Chart Validation
+      block:
+        - name: Update repository
+          kubernetes.core.helm_repository:
+            name: '{{ gpuoperator_vars.kubernetes.helm.repository.org }}'
+            repo_url: '{{ gpuoperator_map.helm.repository.url }}'
+            force_update: true
+
+        - name: Validate cluster kubeconfig path
+          ansible.builtin.stat:
+            path: '{{ k3s_project.cluster.kubeconfig }}'
+          register: gpuoperator_kubeconfig
+          changed_when: false
+
+        - name: Get deployed chart release info
+          kubernetes.core.helm_info:
+            kubeconfig: '{{ k3s_project.cluster.kubeconfig }}'
+            name: '{{ gpuoperator_vars.kubernetes.helm.chart.name }}'
+            namespace: '{{ gpuoperator_vars.kubernetes.namespace }}'
+          register: gpuoperator_release
+          when: gpuoperator_kubeconfig.stat.exists
+          changed_when: false
+
+        - name: Set comparison fact
+          ansible.builtin.set_fact:
+            gpuoperator_comparison:
+              chart: '{{ gpuoperator_map.helm.chart.version }}'
+              release: "{{ gpuoperator_release.status.chart | default('0') | regex_search('[0-9.]+') }}"
+
+        - name: Set chart postinstall fact
+          ansible.builtin.set_fact:
+            gpuoperator_postinstall: false
+
+        - name: Validate chart values
+          ansible.builtin.debug:
+            msg: "{{ lookup('ansible.builtin.template', 'values.j2') }}"

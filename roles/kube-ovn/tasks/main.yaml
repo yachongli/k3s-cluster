@@ -1,0 +1,88 @@
+---
+- name: Role Facts
+  ansible.builtin.include_role:
+    name: '{{ role }}'
+    tasks_from: facts
+  loop:
+    - k3s
+    - kube-ovn
+  loop_control:
+    loop_var: role
+
+- name: Role Provisioning
+  when: inventory_hostname in k3s_map.server.hosts
+  block:
+    - name: Validate service state
+      ansible.builtin.wait_for:
+        port: '{{ k3s_vars.server.api.port }}'
+        timeout: 30
+      any_errors_fatal: true
+
+    - name: Add repository
+      kubernetes.core.helm_repository:
+        name: '{{ kubeovn_vars.kubernetes.helm.repository.org }}'
+        repo_url: '{{ kubeovn_map.helm.repository.url }}'
+        force_update: true
+      register: kubeovn_result
+      delay: 1
+      retries: 3
+      until: kubeovn_result is not failed
+
+    - name: Label control-plane nodes for Kube-OVN
+      ansible.builtin.command:
+        cmd: kubectl --kubeconfig {{ k3s_project.cluster.kubeconfig }} label node {{ hostvars[item].ansible_facts.hostname | default(item) }} kube-ovn/role=master --overwrite
+      loop: '{{ groups.server }}'
+      run_once: true
+      changed_when: false
+
+    - name: Chart Setup
+      run_once: true
+      block:
+        - name: Set chart postinstall fact
+          ansible.builtin.set_fact:
+            kubeovn_postinstall: false
+
+        - name: Install chart
+          kubernetes.core.helm:
+            chart_ref: '{{ kubeovn_map.helm.chart.reference }}'
+            chart_version: '{{ kubeovn_vars.kubernetes.helm.chart.version }}'
+            kubeconfig: '{{ k3s_project.cluster.kubeconfig }}'
+            name: '{{ kubeovn_vars.kubernetes.helm.chart.name }}'
+            namespace: '{{ kubeovn_vars.kubernetes.namespace }}'
+            timeout: '{{ kubeovn_map.helm.timeout }}'
+            values: "{{ lookup('ansible.builtin.template', 'values.j2') | from_yaml }}"
+            create_namespace: true
+            update_repo_cache: true
+            wait: true
+          register: kubeovn_result
+          delay: 1
+          retries: 3
+          until: kubeovn_result is not failed
+
+        - name: Wait for Kube-OVN controller rollout
+          kubernetes.core.k8s_info:
+            kind: Deployment
+            name: kube-ovn-controller
+            namespace: '{{ kubeovn_vars.kubernetes.namespace }}'
+            kubeconfig: '{{ k3s_project.cluster.kubeconfig }}'
+          register: kubeovn_result
+          delay: 5
+          retries: 30
+          until:
+            - kubeovn_result.resources | length > 0
+            - (kubeovn_result.resources[0].status.readyReplicas | default(0)) == (kubeovn_result.resources[0].status.replicas | default(0))
+            - (kubeovn_result.resources[0].status.replicas | default(0)) > 0
+
+        - name: Wait for OVN CNI DaemonSet rollout
+          kubernetes.core.k8s_info:
+            kind: DaemonSet
+            name: kube-ovn-cni
+            namespace: '{{ kubeovn_vars.kubernetes.namespace }}'
+            kubeconfig: '{{ k3s_project.cluster.kubeconfig }}'
+          register: kubeovn_result
+          delay: 5
+          retries: 30
+          until:
+            - kubeovn_result.resources | length > 0
+            - (kubeovn_result.resources[0].status.numberReady | default(0)) == (kubeovn_result.resources[0].status.desiredNumberScheduled | default(0))
+            - (kubeovn_result.resources[0].status.desiredNumberScheduled | default(0)) > 0

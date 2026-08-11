@@ -1,0 +1,39 @@
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: kubevirt
+  namespace: {{ victoriametrics_vars.kubernetes.namespace }}
+  labels:
+    release: {{ victoriametrics_vars.kubernetes.helm.chart.victoriametrics.alias }}
+spec:
+  endpoints:
+    - port: metrics
+{% if kubevirt_map.metrics.service.monitor.scrape.interval is falsy %}
+      interval: {{ victoriametrics_map.service.monitor.scrape.interval }}
+{% else %}
+      interval: {{ kubevirt_map.metrics.service.monitor.scrape.interval }}
+{% endif %}
+{% if kubevirt_map.metrics.service.monitor.scrape.timeout is falsy %}
+      scrapeTimeout: {{ victoriametrics_map.service.monitor.scrape.timeout }}
+{% else %}
+      scrapeTimeout: {{ kubevirt_map.metrics.service.monitor.scrape.timeout }}
+{% endif %}
+      honorLabels: true
+      relabelings:
+        - sourceLabels:
+            - __meta_kubernetes_pod_label_kubevirt_io
+          targetLabel: kubevirt_io_component
+        - sourceLabels:
+            - __meta_kubernetes_namespace
+          targetLabel: kubernetes_namespace
+        - sourceLabels:
+            - __meta_kubernetes_pod_name
+          targetLabel: kubernetes_pod_name
+  namespaceSelector:
+    matchNames:
+      - {{ kubevirt_vars.kubernetes.namespace }}
+  selector:
+    matchExpressions:
+      - key: kubevirt.io
+        operator: Exists

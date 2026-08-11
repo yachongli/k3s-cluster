@@ -1,0 +1,65 @@
+---
+- name: Role Facts
+  ansible.builtin.include_role:
+    name: '{{ role }}'
+    tasks_from: facts
+  loop:
+    - k3s
+    - victoria-metrics
+    - kube-ovn
+  loop_control:
+    loop_var: role
+
+- name: Role Validation
+  when: (ansible_run_tags in [(), ('all',)]) or ('kube-ovn' in ansible_run_tags)
+  run_once: true
+  block:
+    - name: Validate project url
+      ansible.builtin.uri:
+        url: '{{ kubeovn_project.url }}/{{ kubeovn_project.tag }}'
+        timeout: 5
+      register: kubeovn_result
+      delay: 1
+      retries: 3
+      until: kubeovn_result is not failed
+
+    - name: Chart Validation
+      block:
+        - name: Update repository
+          kubernetes.core.helm_repository:
+            name: '{{ kubeovn_vars.kubernetes.helm.repository.org }}'
+            repo_url: '{{ kubeovn_map.helm.repository.url }}'
+            force_update: true
+
+        - name: Validate cluster kubeconfig path
+          ansible.builtin.stat:
+            path: '{{ k3s_project.cluster.kubeconfig }}'
+          register: kubeovn_kubeconfig
+          changed_when: false
+
+        - name: Get deployed chart release info
+          kubernetes.core.helm_info:
+            kubeconfig: '{{ k3s_project.cluster.kubeconfig }}'
+            name: '{{ kubeovn_vars.kubernetes.helm.chart.name }}'
+            namespace: '{{ kubeovn_vars.kubernetes.namespace }}'
+          register: kubeovn_release
+          when: kubeovn_kubeconfig.stat.exists
+          changed_when: false
+
+        - name: Set comparison fact
+          ansible.builtin.set_fact:
+            kubeovn_comparison:
+              chart: '{{ kubeovn_map.helm.chart.version }}'
+              release: "{{ kubeovn_release.status.chart | default('0') | regex_search('[0-9.]+') }}"
+
+        - name: Set chart postinstall fact
+          ansible.builtin.set_fact:
+            kubeovn_postinstall: false
+
+        - name: Validate chart values
+          ansible.builtin.debug:
+            msg: "{{ lookup('ansible.builtin.template', 'values.j2') }}"
+
+        - name: Validate postinstall chart values
+          ansible.builtin.debug:
+            msg: "{{ lookup('ansible.builtin.template', 'values.j2') }}"

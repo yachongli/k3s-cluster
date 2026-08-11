@@ -1,0 +1,27 @@
+---
+- name: Role Post-Install
+  when:
+    - inventory_hostname in k3s_map.server.hosts
+    - gpuoperator_map.metrics.service.monitor.enabled
+  run_once: true
+  block:
+    - name: Update chart postinstall fact
+      ansible.builtin.set_fact:
+        gpuoperator_postinstall: true
+
+    - name: Update chart postinstall values
+      kubernetes.core.helm:
+        chart_ref: '{{ gpuoperator_map.helm.chart.reference }}'
+        chart_version: '{{ gpuoperator_vars.kubernetes.helm.chart.version }}'
+        kubeconfig: '{{ k3s_project.cluster.kubeconfig }}'
+        name: '{{ gpuoperator_vars.kubernetes.helm.chart.name }}'
+        namespace: '{{ gpuoperator_vars.kubernetes.namespace }}'
+        timeout: '{{ gpuoperator_map.helm.timeout }}'
+        values: "{{ lookup('ansible.builtin.template', 'values.j2') | from_yaml }}"
+        reset_values: false
+        reuse_values: true
+        wait: true
+      register: gpuoperator_result
+      delay: 1
+      retries: 3
+      until: gpuoperator_result is not failed

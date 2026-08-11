@@ -1,0 +1,74 @@
+---
+- name: Role Facts
+  ansible.builtin.import_role:
+    name: k3s
+    tasks_from: facts
+
+- name: Role Reset
+  when: inventory_hostname in k3s_map.server.hosts
+  block:
+    - name: Validate cluster kubeconfig path
+      ansible.builtin.stat:
+        path: '{{ k3s_project.cluster.kubeconfig }}'
+      register: cephcsi_kubeconfig
+      changed_when: false
+
+    - name: Remove Helm release and resources
+      when: cephcsi_kubeconfig.stat.exists
+      run_once: true
+      block:
+        - name: Remove StorageClasses
+          kubernetes.core.k8s:
+            definition: "{{ lookup('ansible.builtin.template', 'storageclass_rbd.j2') | from_yaml }}"
+            kubeconfig: '{{ k3s_project.cluster.kubeconfig }}'
+            state: absent
+            wait: true
+          failed_when: false
+
+        - name: Remove CephFS StorageClass
+          kubernetes.core.k8s:
+            definition: "{{ lookup('ansible.builtin.template', 'storageclass_cephfs.j2') | from_yaml }}"
+            kubeconfig: '{{ k3s_project.cluster.kubeconfig }}'
+            state: absent
+            wait: true
+          failed_when: false
+
+        - name: Uninstall chart
+          kubernetes.core.helm:
+            name: '{{ cephcsi_vars.kubernetes.helm.chart.name }}'
+            namespace: '{{ cephcsi_vars.kubernetes.namespace }}'
+            kubeconfig: '{{ k3s_project.cluster.kubeconfig }}'
+            state: absent
+            wait: true
+          register: cephcsi_result
+          delay: 1
+          retries: 3
+          until: cephcsi_result is not failed
+          failed_when: cephcsi_result is failed and 'not found' not in cephcsi_result.msg | default('') | lower
+
+        - name: Remove cephx client key secret
+          kubernetes.core.k8s:
+            definition: "{{ lookup('ansible.builtin.template', 'secret.j2') | from_yaml }}"
+            kubeconfig: '{{ k3s_project.cluster.kubeconfig }}'
+            state: absent
+            wait: true
+          failed_when: false
+
+        - name: Remove repository
+          kubernetes.core.helm_repository:
+            name: '{{ cephcsi_vars.kubernetes.helm.repository.org }}'
+            repo_state: absent
+          when: "'helm' in ansible_facts.packages"
+
+        - name: Remove namespace
+          kubernetes.core.k8s:
+            kind: Namespace
+            name: '{{ cephcsi_vars.kubernetes.namespace }}'
+            kubeconfig: '{{ k3s_project.cluster.kubeconfig }}'
+            state: absent
+            wait: true
+          register: cephcsi_result
+          delay: 1
+          retries: 3
+          until: cephcsi_result is not failed
+          failed_when: cephcsi_result is failed and 'NotFound' not in cephcsi_result.msg | default('')

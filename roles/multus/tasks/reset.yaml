@@ -1,0 +1,80 @@
+---
+- name: Role Facts
+  ansible.builtin.import_role:
+    name: k3s
+    tasks_from: facts
+
+- name: Role Reset
+  when: inventory_hostname in k3s_map.server.hosts
+  block:
+    - name: Validate cluster kubeconfig path
+      ansible.builtin.stat:
+        path: '{{ k3s_project.cluster.kubeconfig }}'
+      register: multus_kubeconfig
+      changed_when: false
+
+    - name: Remove Multus deployment
+      when: multus_kubeconfig.stat.exists
+      run_once: true
+      block:
+        - name: Remove Multus DaemonSet
+          kubernetes.core.k8s:
+            kind: DaemonSet
+            name: kube-multus-ds
+            namespace: '{{ multus_vars.kubernetes.namespace }}'
+            kubeconfig: '{{ k3s_project.cluster.kubeconfig }}'
+            state: absent
+            wait: true
+            wait_timeout: 120
+          register: multus_result
+          delay: 1
+          retries: 3
+          until: multus_result is not failed
+          failed_when: multus_result is failed and 'NotFound' not in multus_result.msg | default('')
+
+        - name: Remove Multus ConfigMap
+          kubernetes.core.k8s:
+            kind: ConfigMap
+            name: multus-cni-config
+            namespace: '{{ multus_vars.kubernetes.namespace }}'
+            kubeconfig: '{{ k3s_project.cluster.kubeconfig }}'
+            state: absent
+            wait: true
+          register: multus_result
+          delay: 1
+          retries: 3
+          until: multus_result is not failed
+          failed_when: multus_result is failed and 'NotFound' not in multus_result.msg | default('')
+
+        - name: Remove Multus RBAC
+          kubernetes.core.k8s:
+            definition: "{{ lookup('ansible.builtin.template', 'rbac.j2') | from_yaml_all }}"
+            kubeconfig: '{{ k3s_project.cluster.kubeconfig }}'
+            state: absent
+            wait: true
+          register: multus_result
+          delay: 1
+          retries: 3
+          until: multus_result is not failed
+
+        - name: Remove NetworkAttachmentDefinition CRD
+          kubernetes.core.k8s:
+            kind: CustomResourceDefinition
+            name: network-attachment-definitions.k8s.cni.cncf.io
+            kubeconfig: '{{ k3s_project.cluster.kubeconfig }}'
+            state: absent
+            wait: true
+          register: multus_result
+          delay: 1
+          retries: 3
+          until: multus_result is not failed
+          failed_when: multus_result is failed and 'NotFound' not in multus_result.msg | default('')
+
+    - name: Remove Multus CNI config files
+      ansible.builtin.file:
+        path: '{{ item }}'
+        state: absent
+      loop:
+        - /etc/cni/net.d/00-multus.conf
+        - /etc/cni/net.d/multus.d
+      when: ansible_facts.os_family == 'Debian'

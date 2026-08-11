@@ -1,0 +1,50 @@
+---
+- name: Role Facts
+  ansible.builtin.import_role:
+    name: k3s
+    tasks_from: facts
+
+- name: Role Reset
+  when: inventory_hostname in k3s_map.server.hosts
+  block:
+    - name: Validate cluster kubeconfig path
+      ansible.builtin.stat:
+        path: '{{ k3s_project.cluster.kubeconfig }}'
+      register: gpuoperator_kubeconfig
+      changed_when: false
+
+    - name: Remove Helm release
+      when: gpuoperator_kubeconfig.stat.exists
+      run_once: true
+      block:
+        - name: Uninstall chart
+          kubernetes.core.helm:
+            name: '{{ gpuoperator_vars.kubernetes.helm.chart.name }}'
+            namespace: '{{ gpuoperator_vars.kubernetes.namespace }}'
+            kubeconfig: '{{ k3s_project.cluster.kubeconfig }}'
+            state: absent
+            wait: true
+          register: gpuoperator_result
+          delay: 1
+          retries: 3
+          until: gpuoperator_result is not failed
+          failed_when: gpuoperator_result is failed and 'not found' not in gpuoperator_result.msg | default('') | lower
+
+        - name: Remove repository
+          kubernetes.core.helm_repository:
+            name: '{{ gpuoperator_vars.kubernetes.helm.repository.org }}'
+            repo_state: absent
+          when: "'helm' in ansible_facts.packages"
+
+        - name: Remove namespace
+          kubernetes.core.k8s:
+            kind: Namespace
+            name: '{{ gpuoperator_vars.kubernetes.namespace }}'
+            kubeconfig: '{{ k3s_project.cluster.kubeconfig }}'
+            state: absent
+            wait: true
+          register: gpuoperator_result
+          delay: 1
+          retries: 3
+          until: gpuoperator_result is not failed
+          failed_when: gpuoperator_result is failed and 'NotFound' not in gpuoperator_result.msg | default('')

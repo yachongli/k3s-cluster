@@ -1,0 +1,48 @@
+---
+- name: Role Facts
+  ansible.builtin.include_role:
+    name: '{{ role }}'
+    tasks_from: facts
+  loop:
+    - k3s
+    - multus
+  loop_control:
+    loop_var: role
+
+- name: Role Validation
+  when: (ansible_run_tags in [(), ('all',)]) or ('multus' in ansible_run_tags)
+  run_once: true
+  block:
+    - name: Validate project url
+      ansible.builtin.uri:
+        url: '{{ multus_project.url }}/{{ multus_project.tag }}'
+        timeout: 5
+      register: multus_result
+      delay: 1
+      retries: 3
+      until: multus_result is not failed
+
+    - name: Validate daemonset manifest url
+      ansible.builtin.uri:
+        url: '{{ multus_map.repository.url }}/{{ multus_map.manifest.daemonset }}'
+        timeout: 5
+      register: multus_result
+      delay: 1
+      retries: 3
+      until: multus_result is not failed
+
+    - name: Validate cluster kubeconfig path
+      ansible.builtin.stat:
+        path: '{{ k3s_project.cluster.kubeconfig }}'
+      register: multus_kubeconfig
+      changed_when: false
+
+    - name: Get deployed Multus DaemonSet info
+      kubernetes.core.k8s_info:
+        kind: DaemonSet
+        name: kube-multus-ds
+        namespace: '{{ multus_vars.kubernetes.namespace }}'
+        kubeconfig: '{{ k3s_project.cluster.kubeconfig }}'
+      register: multus_release
+      when: multus_kubeconfig.stat.exists
+      changed_when: false

@@ -1,0 +1,12 @@
+---
+- name: Role Post-Install
+  when: inventory_hostname in k3s_map.server.hosts
+  run_once: true
+  block:
+    - name: Verify Multus CNI config on nodes
+      ansible.builtin.stat:
+        path: /etc/cni/net.d/{{ multus_vars.kubernetes.cni_config_file }}
+      register: multus_cni_config
+      changed_when: false
+      failed_when: not multus_cni_config.stat.exists
+      when: inventory_hostname in k3s_map.server.hosts

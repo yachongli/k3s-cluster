@@ -1,0 +1,53 @@
+---
+- name: Role Facts
+  ansible.builtin.include_role:
+    name: '{{ role }}'
+    tasks_from: facts
+  loop:
+    - k3s
+    - multus
+  loop_control:
+    loop_var: role
+
+- name: Role Provisioning
+  when: inventory_hostname in k3s_map.server.hosts
+  block:
+    - name: Validate service state
+      ansible.builtin.wait_for:
+        port: '{{ k3s_vars.server.api.port }}'
+        timeout: 30
+      any_errors_fatal: true
+
+    - name: Chart Setup
+      run_once: true
+      block:
+        - name: Apply Multus RBAC and ConfigMap
+          kubernetes.core.k8s:
+            definition: "{{ lookup('ansible.builtin.template', 'manifest.j2') | from_yaml_all | rejectattr('kind', '==', 'DaemonSet') | list }}"
+            kubeconfig: '{{ k3s_project.cluster.kubeconfig }}'
+            wait: true
+
+        - name: Apply Multus DaemonSet
+          kubernetes.core.k8s:
+            definition: "{{ lookup('ansible.builtin.template', 'manifest.j2') | from_yaml_all | selectattr('kind', '==', 'DaemonSet') | list }}"
+            kubeconfig: '{{ k3s_project.cluster.kubeconfig }}'
+            wait: false
+          register: multus_daemonset
+
+        - name: Show DaemonSet status
+          ansible.builtin.debug:
+            msg: "DaemonSet applied: {{ multus_daemonset.result.status.desiredNumberScheduled | default(0) }} desired, {{ multus_daemonset.result.status.numberReady | default(0) }} ready"
+
+        - name: Wait for Multus DaemonSet rollout
+          kubernetes.core.k8s_info:
+            kind: DaemonSet
+            name: kube-multus-ds
+            namespace: '{{ multus_vars.kubernetes.namespace }}'
+            kubeconfig: '{{ k3s_project.cluster.kubeconfig }}'
+          register: multus_result
+          delay: 5
+          retries: 30
+          until:
+            - multus_result.resources | length > 0
+            - (multus_result.resources[0].status.numberReady | default(0)) == (multus_result.resources[0].status.desiredNumberScheduled | default(0))
+            - (multus_result.resources[0].status.desiredNumberScheduled | default(0)) > 0

@@ -1,0 +1,52 @@
+---
+kubeovn_vars:
+  kubernetes:
+    helm:
+      chart:
+        name: kube-ovn
+        version: '{{ kube_ovn_chart_version | default("v1.16.2") }}'
+      repository:
+        name: kube-ovn
+        org: kubeovn
+        url: https://kubeovn.github.io
+    namespace: kube-system
+    # -- Non-Primary CNI mode. Defaults to follow enable_cilium:
+    #   Cilium enabled  → non_primary_cni=true (Kube-OVN as secondary)
+    #   Cilium disabled → non_primary_cni=false (Kube-OVN as primary)
+    # Override with kube_ovn_non_primary_cni in globals.yaml to force.
+    non_primary_cni: '{{ kube_ovn_non_primary_cni | default((enable_cilium | default(true)) | bool) }}'
+    cni:
+      # -- CNI config file priority (00=multus, 05=cilium, 10=kube-ovn)
+      # Kube-OVN is attached as an ADDITIONAL CNI only, never the primary.
+      # It is exposed to pods via NetworkAttachmentDefinition through Multus.
+      config_priority: '{{ kube_ovn_cni_config_priority | default(defaults.kube_ovn.cni_config_priority) }}'
+      config_dir: /etc/cni/net.d
+      bin_dir: /opt/cni/bin
+      conf_file: '/kube-ovn/{{ kube_ovn_cni_config_priority | default(defaults.kube_ovn.cni_config_priority) }}-kube-ovn.conflist'
+    networking:
+      # -- Pod CIDR for Kube-OVN overlay (must not conflict with Cilium's Pod CIDR)
+      pod_cidr: '{{ kube_ovn_pod_cidr | default(defaults.kube_ovn.pod_cidr) }}'
+      pod_gateway: '{{ kube_ovn_pod_gateway | default(defaults.kube_ovn.pod_gateway) }}'
+      # -- Service CIDR for Kube-OVN internal LB (must not conflict with K3s Service CIDR)
+      svc_cidr: '{{ kube_ovn_svc_cidr | default(defaults.kube_ovn.svc_cidr) }}'
+      # -- Join CIDR for node-to-node tunnel (must not conflict with other CIDRs)
+      join_cidr: '{{ kube_ovn_join_cidr | default(defaults.kube_ovn.join_cidr) }}'
+      # -- IP stack: ipv4, ipv6, dual_stack
+      net_stack: '{{ kube_ovn_net_stack | default(defaults.kube_ovn.net_stack) }}'
+    func:
+      # -- Enable OVN embedded LoadBalancer (replaces kube-proxy for OVN networks)
+      enable_lb: '{{ kube_ovn_enable_lb | default(defaults.kube_ovn.enable_lb) }}'
+      # -- Enable NetworkPolicy support via OVN ACL
+      enable_np: '{{ kube_ovn_enable_np | default(defaults.kube_ovn.enable_np) }}'
+      # -- Enable NAT gateway for VPC egress
+      enable_nat_gw: '{{ kube_ovn_enable_nat_gw | default(defaults.kube_ovn.enable_nat_gw) }}'
+      # -- Keep VM IP across migrations (KubeVirt)
+      enable_keep_vm_ip: true
+    monitoring:
+      service_monitor:
+        enabled: '{{ defaults.cluster.service_monitor_enabled }}'
+        scrape:
+          # If `null`, default value is `victoriametrics_map.service.monitor.scrape.interval`
+          interval: null
+          # If `null`, default value is `victoriametrics_map.service.monitor.scrape.timeout`
+          timeout: null

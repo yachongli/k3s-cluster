@@ -1,0 +1,29 @@
+---
+- name: Set map fact
+  ansible.builtin.set_fact:
+    multus_map:
+      helm:
+        platform:
+          key: https://github.com
+          raw: https://raw.githubusercontent.com
+      manifest:
+        daemonset: multus-daemonset.yml
+      repository:
+        name: k8snetworkplumbingwg/multus-cni
+        url: https://raw.githubusercontent.com/k8snetworkplumbingwg/multus-cni/master/deployments
+  run_once: true
+
+- name: Set project fact
+  ansible.builtin.set_fact:
+    multus_project:
+      tag: '{{ multus_vars.kubernetes.image.tag }}'
+      url: '{{
+        "/".join([multus_map.helm.platform.key,
+          multus_map.repository.name, "releases", "tag"])
+        }}'
+  run_once: true
+
+- name: Set variables fact
+  ansible.builtin.set_fact:
+    multus_vars: '{{ multus_vars }}'
+  run_once: true

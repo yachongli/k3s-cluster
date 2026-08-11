@@ -1,0 +1,5 @@
+apiVersion: v2
+name: gpu-operator
+description: Documentation generator for gpu-operator Ansible role
+home: https://github.com/NVIDIA/gpu-operator
+version: 26.3.3

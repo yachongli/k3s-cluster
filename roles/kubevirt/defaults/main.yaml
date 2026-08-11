@@ -1,0 +1,64 @@
+---
+kubevirt_vars:
+  kubernetes:
+    configuration:
+      customize_components:
+        patches: []
+      developer:
+        feature_gates:
+          enabled: true
+          # -- See [documentation](https://kubevirt.io/user-guide/operations/feature_gates/), for details
+          entries: '{{ kubevirt_feature_gates | default(defaults.kubevirt.feature_gates) }}'
+        # -- Set `true` on hosts without hardware virtualization support (`/dev/kvm` missing), e.g. nested VMs
+        use_emulation: '{{ kubevirt_use_emulation | default(defaults.kubevirt.use_emulation) }}'
+      image_pull_policy: IfNotPresent
+      infra:
+        node_placement:
+          enabled: false
+          node_selector: {}
+          tolerations: []
+      # -- Permitted host devices for PCI/mediated device passthrough to VMs.
+      # See: https://kubevirt.io/user-guide/operations/host_dev_assignment/
+      # Populated from `kubevirt_permitted_host_devices` (flat override) or
+      # defaults to empty (no passthrough).
+      permitted_host_devices:
+        pci_host_devices: '{{ kubevirt_permitted_pci_host_devices | default(defaults.kubevirt.permitted_pci_host_devices) }}'
+        mediated_devices: '{{ kubevirt_permitted_mediated_devices | default(defaults.kubevirt.permitted_mediated_devices) }}'
+      network:
+        # -- Available options are `masquerade`, `bridge` and `slirp`
+        default_network_interface: '{{ kubevirt_default_network_interface | default(defaults.kubevirt.default_network_interface) }}'
+        binding:
+          managedtap:
+            # -- Enable managedTap network binding. Required when the
+            # `NetworkBindingPlugins` feature gate is on.
+            enabled: '{{ kubevirt_managedtap_enabled | default(defaults.kubevirt.managedtap_enabled) }}'
+            # -- Domain attachment type. `managedTap` is the only supported value.
+            domain_attachment_type: '{{ kubevirt_managedtap_domain_attachment_type | default(defaults.kubevirt.managedtap_domain_attachment_type) }}'
+      uninstall_strategy: BlockUninstallIfWorkloadsExist
+      workload_update_strategy:
+        batch_eviction_interval: 1m
+        batch_eviction_size: 10
+        methods:
+          - LiveMigrate
+      workloads:
+        node_placement:
+          enabled: false
+          node_selector: {}
+          tolerations: []
+    monitoring:
+      service_monitor:
+        enabled: true
+        scrape:
+          # If `null`, default value is `victoriametrics_map.service.monitor.scrape.interval`
+          interval: null
+          # If `null`, default value is `victoriametrics_map.service.monitor.scrape.timeout`
+          timeout: null
+    namespace: kubevirt
+    network_policies:
+      enabled: true
+  release:
+    # -- `virtctl` binary file, auto-detected from `ansible_facts.machine` into `kubevirt_map.release.file`
+    repository:
+      name: kubevirt
+      org: kubevirt
+    version: '{{ kubevirt_version | default("v1.8.4") }}'

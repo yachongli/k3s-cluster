@@ -1,0 +1,20 @@
+---
+- name: Role Post-Install
+  when:
+    - inventory_hostname in k3s_map.server.hosts
+    - kubevirt_map.metrics.service.monitor.enabled
+  run_once: true
+  block:
+    - name: Update chart postinstall fact
+      ansible.builtin.set_fact:
+        kubevirt_postinstall: true
+
+    - name: Apply KubeVirt service monitor
+      kubernetes.core.k8s:
+        definition: "{{ lookup('ansible.builtin.template', 'service_monitor.j2') | from_yaml }}"
+        kubeconfig: '{{ k3s_project.cluster.kubeconfig }}'
+        wait: true
+      register: kubevirt_result
+      delay: 1
+      retries: 3
+      until: kubevirt_result is not failed

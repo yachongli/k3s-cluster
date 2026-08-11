@@ -1,0 +1,70 @@
+---
+- name: Role Facts
+  ansible.builtin.include_role:
+    name: '{{ role }}'
+    tasks_from: facts
+  loop:
+    - k3s
+    - victoria-metrics
+    - gpu-operator
+  loop_control:
+    loop_var: role
+
+- name: Role Provisioning
+  when: inventory_hostname in k3s_map.server.hosts
+  block:
+    - name: Validate service state
+      ansible.builtin.wait_for:
+        port: '{{ k3s_vars.server.api.port }}'
+        timeout: 30
+      any_errors_fatal: true
+
+    - name: Add repository
+      kubernetes.core.helm_repository:
+        name: '{{ gpuoperator_vars.kubernetes.helm.repository.org }}'
+        repo_url: '{{ gpuoperator_map.helm.repository.url }}'
+        force_update: true
+      register: gpuoperator_result
+      delay: 1
+      retries: 3
+      until: gpuoperator_result is not failed
+
+    - name: Chart Setup
+      run_once: true
+      block:
+        - name: Set chart postinstall fact
+          ansible.builtin.set_fact:
+            gpuoperator_postinstall: false
+
+        - name: Install chart
+          kubernetes.core.helm:
+            chart_ref: '{{ gpuoperator_map.helm.chart.reference }}'
+            chart_version: '{{ gpuoperator_vars.kubernetes.helm.chart.version }}'
+            kubeconfig: '{{ k3s_project.cluster.kubeconfig }}'
+            name: '{{ gpuoperator_vars.kubernetes.helm.chart.name }}'
+            namespace: '{{ gpuoperator_vars.kubernetes.namespace }}'
+            timeout: '{{ gpuoperator_map.helm.timeout }}'
+            values: "{{ lookup('ansible.builtin.template', 'values.j2') | from_yaml }}"
+            create_namespace: true
+            update_repo_cache: true
+            wait: true
+          register: gpuoperator_result
+          delay: 1
+          retries: 3
+          until: gpuoperator_result is not failed
+
+        - name: Wait for GPU Operator deployment rollout
+          kubernetes.core.k8s_info:
+            kind: Deployment
+            name: gpu-operator
+            namespace: '{{ gpuoperator_vars.kubernetes.namespace }}'
+            kubeconfig: '{{ k3s_project.cluster.kubeconfig }}'
+            wait: true
+            wait_timeout: 300
+            wait_condition:
+              type: Available
+              status: 'True'
+          register: gpuoperator_result
+          delay: 5
+          retries: 30
+          until: gpuoperator_result is not failed

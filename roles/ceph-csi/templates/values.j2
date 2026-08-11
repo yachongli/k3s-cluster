@@ -1,0 +1,57 @@
+cephConnections:
+  - name: '{{ cephcsi_vars.kubernetes.ceph.connection_name }}'
+    monitors:
+{% for mon in cephcsi_vars.kubernetes.ceph.monitors %}
+      {{ mon }}: {}
+{% endfor %}
+    rbdMirrorDaemonCount: 1
+    crushLocationLabels: []
+
+clientProfiles:
+  - name: '{{ cephcsi_vars.kubernetes.ceph.connection_name }}'
+    cephConnection:
+      name: '{{ cephcsi_vars.kubernetes.ceph.connection_name }}'
+    rbd:
+      radosNamespace: ''
+{% if cephcsi_vars.kubernetes.ceph.cephfs_fsname | length > 0 %}
+    cephFs:
+      subVolumeGroup: ''
+{% endif %}
+
+operatorConfig:
+  name: ceph-csi-operator-config
+  create: true
+  driverSpecDefaults:
+    log:
+      verbosity: 0
+      rotation:
+        enabled: true
+        maxFiles: 7
+        maxLogSize: 10G
+        periodicity: daily
+
+drivers:
+  rbd:
+    enabled: '{{ cephcsi_vars.kubernetes.drivers.rbd.enabled | lower }}'
+    clusterName: '{{ cephcsi_vars.kubernetes.ceph.connection_name }}'
+    nodePlugin:
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+    controllerPlugin:
+      replicas: 1
+{% if cephcsi_vars.kubernetes.drivers.cephfs.enabled is truthy %}
+  cephfs:
+    enabled: 'true'
+    clusterName: '{{ cephcsi_vars.kubernetes.ceph.connection_name }}'
+    nodePlugin:
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+    controllerPlugin:
+      replicas: 1
+{% endif %}
+
+imagePullSecrets: []
