@@ -9,7 +9,7 @@ kubeovn_vars:
         name: kube-ovn
         org: kubeovn
         url: https://kubeovn.github.io
-    namespace: kube-system
+    namespace: '{{ defaults.kube_ovn.namespace }}'
     # -- Non-Primary CNI mode. Defaults to follow enable_cilium:
     #   Cilium enabled  → non_primary_cni=true (Kube-OVN as secondary)
     #   Cilium disabled → non_primary_cni=false (Kube-OVN as primary)

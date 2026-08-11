@@ -88,6 +88,16 @@ cluster_api_host: "192.168.4.10"                   # 必填：LB / K3s API VIP�
 # cluster_service_monitor_enabled: true            # 自动值：等于 enable_victoria_metrics
 # cluster_ingress_class: "cilium"                  # 自动值：启用 cilium 时为 cilium，否则 traefik
 
+# --- Namespace 分离 ---
+# 主要组件默认部署到各自独立的 namespace。在此覆盖可修改 namespace 名称
+# （例如把两个组件合并到一个 namespace，或改回 kube-system 以保持兼容）。
+#
+# cilium_namespace: "cilium-system"
+# kube_ovn_namespace: "kube-ovn-system"
+# longhorn_namespace: "longhorn-system"
+# victoria_metrics_namespace: "monitoring"           # VictoriaMetrics + VictoriaLogs + Grafana
+# victoria_logs_namespace: "monitoring"              # 默认跟随 victoria_metrics_namespace
+
 
 ###################
 # 网络 - Cilium（CNI）

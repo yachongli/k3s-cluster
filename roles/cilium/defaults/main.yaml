@@ -115,7 +115,7 @@ cilium_vars:
     log_options:
       # -- Available options are `INFO`, `WARNING`, `ERROR` and `FATAL`
       level: '{{ cilium_log_level | default(defaults.cilium.log_level) }}'
-    namespace: kube-system
+    namespace: '{{ defaults.cilium.namespace }}'
     # -- Pod-to-pod routing. Valid: native | tunnel
     routing:
       mode: '{{ cilium_routing_mode | default(defaults.cilium.routing_mode) }}'

@@ -88,6 +88,17 @@ cluster_api_host: "192.168.4.10"                   # REQUIRED: LB / K3s API VIP 
 # cluster_service_monitor_enabled: true            # auto: enable_victoria_metrics
 # cluster_ingress_class: "cilium"                  # auto: cilium if enable_cilium else traefik
 
+# --- Namespace separation ---
+# Major components deploy to their own namespace by default. Override
+# here to change the namespace name (e.g. merge two components into one
+# namespace, or move back to kube-system for compatibility).
+#
+# cilium_namespace: "cilium-system"
+# kube_ovn_namespace: "kube-ovn-system"
+# longhorn_namespace: "longhorn-system"
+# victoria_metrics_namespace: "monitoring"           # VictoriaMetrics + VictoriaLogs + Grafana
+# victoria_logs_namespace: "monitoring"              # defaults to victoria_metrics_namespace
+
 
 ###################
 # Networking - Cilium (CNI)

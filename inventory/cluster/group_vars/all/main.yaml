@@ -158,6 +158,7 @@ defaults:
         limits: {cpu: 4, memory: 8Gi}
         requests: {cpu: 1, memory: 4Gi}
   cilium:
+    namespace: '{{ cilium_namespace | default("cilium-system") }}'
     lb_ip_start: '192.168.4.20'
     lb_ip_stop: '192.168.4.100'
     ipam_cluster_pool: '10.42.0.0/16'
@@ -197,6 +198,7 @@ defaults:
     # -- Namespace for multus DaemonSet.
     namespace: kube-system
   kube_ovn:
+    namespace: '{{ kube_ovn_namespace | default("kube-ovn-system") }}'
     # -- Pod CIDR for Kube-OVN overlay (must not conflict with Cilium's Pod CIDR)
     pod_cidr: '10.18.0.0/16'
     pod_gateway: '10.18.0.1'
@@ -227,6 +229,7 @@ defaults:
     domain: noty.cc
     acme_server: staging
   longhorn:
+    namespace: '{{ longhorn_namespace | default("longhorn-system") }}'
     replica_count: 2
     backup_enabled: true
     backup_target: cifs://nas.noty.cc/backup
@@ -252,6 +255,7 @@ defaults:
   metrics_server:
     tls_type: cert-manager
   victoria_logs:
+    namespace: '{{ victoria_logs_namespace | default(defaults.victoria_metrics.namespace) }}'
     storage_class: '{{ defaults.cluster.storage_class }}'
     storage_size: 5Gi
     retention: 7d
@@ -262,6 +266,7 @@ defaults:
     node_selector: {}
     tolerations: []
   victoria_metrics:
+    namespace: '{{ victoria_metrics_namespace | default("monitoring") }}'
     storage_class: '{{ defaults.cluster.storage_class }}'
     storage_size: 50Gi
     aux_storage_size: 5Gi

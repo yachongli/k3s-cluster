@@ -90,7 +90,7 @@ victoriametrics_vars:
     kube_state_metrics:
       replicas: 1
       resources: '{{ defaults.cluster.pod_resources.small }}'
-    namespace: kube-system
+    namespace: '{{ defaults.victoria_metrics.namespace }}'
     victoria_metrics_operator:
       # -- Available options are `info` and `error`
       log_level: error

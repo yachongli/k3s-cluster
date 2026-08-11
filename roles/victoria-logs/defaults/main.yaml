@@ -17,7 +17,7 @@ victorialogs_vars:
         name: helm-charts
         org: VictoriaMetrics
         url: https://victoriametrics.github.io
-    namespace: kube-system
+    namespace: '{{ defaults.victoria_logs.namespace }}'
     server:
       ingress:
         enabled: true
