@@ -1,0 +1,491 @@
+---
+# ========================================================================
+# k3s-cluster globals.yaml（kolla 风格）
+#
+# 集中式覆盖文件。所有默认值都定义在 `main.yaml` 顶层的 `defaults:` map
+# 里；下方取消对应行的注释即可覆盖。密钥凭据在 `passwords.yaml`
+# （vault 加密）或 `/etc/k3s-cluster/passwords.yaml`（明文，优先加载）。
+#
+# 命名约定：
+#   enable_<component>: true|false   # 是否部署该组件
+#   <component>_<param>: value       # 覆盖 defaults.<component>.<param>
+# ========================================================================
+
+
+###################
+# 集群基础配置
+###################
+
+# --- SSH / Ansible 连接（全部可选） ---
+# 默认部署模型：SSH key 登录 + 免密 sudo。
+# 只有当目标主机强制使用密码认证时，才取消下方注释。
+# 临时运行推荐用 `ansible-playbook --ask-pass --ask-become-pass`，
+# 不建议把明文密码写入本文件。
+#
+# ansible_user: "root"                             # SSH 用户（main.yaml 默认：root）
+# ansible_password: "your-ssh-password"            # 仅当需要 SSH 密码认证时
+# ansible_become_password: "your-sudo-password"    # 仅当 sudo 需要密码时
+
+# --- 集群身份 ---
+cluster_api_host: "192.168.4.10"                   # 必填：LB / K3s API VIP（无默认值）
+
+# cluster_tls_san_extra: []                        # 额外 TLS SAN 条目
+# cluster_domain: "cluster.local"                 # 集群域名（默认 cluster.local）
+# cluster_architecture: "x86_64"                    # x86_64 | aarch64（默认从 ansible_facts 自动探测）
+# network_interface: "eth0"                         # Keepalived 用来对外宣告 API VIP 的网卡。
+                                                    # 该网卡必须存在于每个 server 节点上，
+                                                    # 且与 cluster_api_host 处于同一二层广播域。
+
+# --- 核心二进制版本 ---
+# helm_version: "v3.20.0-1"                       # Helm CLI（Debian 包）
+# helm_diff_plugin_version: "v3.15.6"             # helm-diff 插件
+# k3s_version: "v1.34.6+k3s1"                     # K3s 二进制
+# kubepug_version: "v1.7.1"                       # API 弃用检查器
+
+# --- HTTP/HTTPS 代理 ---
+# 提供两种模式：
+#
+# 1. 部署期代理（临时，推荐大多数场景使用）
+#    仅 Ansible playbook 执行期间生效，不写入目标主机。
+#    Helm 与 git 下载在部署期间走代理。
+#    apt 默认绕过代理（设置 cluster_apt_proxy: true 可让 apt 也走代理）。
+#
+# cluster_deploy_proxy: "http://10.0.0.1:7890"
+# cluster_apt_proxy: false                          # true 时 apt 也走代理
+#
+# 2. 持久化代理（写入目标主机）
+#    会写入 /etc/profile.d/proxy.sh、systemd drop-in 与 git config。
+#    适用于主机长期需要代理（例如 containerd 拉镜像）的场景。
+#    清空该变量并重跑 playbook 即可移除。
+#
+# cluster_http_proxy: "http://10.0.0.1:7890"
+# cluster_https_proxy: "http://10.0.0.1:7890"
+# cluster_no_proxy:
+#   - "127.0.0.1,localhost"
+#   - "10.0.0.0/8"          # service 与 pod CIDR
+#   - "192.168.0.0/16"      # 内网 LAN
+#   - "cluster.local"        # 集群内 DNS
+
+# --- Registry 镜像加速 ---
+# 设置为本地 Registry，即可通过一台主机代理所有镜像拉取。
+# 开启后所有上游（docker.io、ghcr.io、nvcr.io 等）都会被镜像到该端点；
+# 留空则直接从上游拉取。
+#
+# cluster_registry_endpoint: "http://10.254.25.5:4000"
+
+# --- Helm 插件镜像（helm-diff） ---
+# 当 GitHub 拉取缓慢或不可达（如中国大陆），可以覆盖 helm-diff 插件的
+# 下载 URL。默认走 GitHub 上游。
+#
+# helm_plugin_diff_url: "https://gitee.com/mirrors_databus23/helm-diff"
+
+# --- 集群级派生默认值 ---
+# 会随 enable_* 开关自动切换。强制覆写会作用于所有依赖它的组件
+# （更细粒度的控制见各组件对应节）。
+#
+# cluster_storage_class: "longhorn"                # 或 "local-path"、"rook-ceph" …
+#                                                  # 自动值：启用 longhorn 时为 longhorn，否则 local-path
+# cluster_service_monitor_enabled: true            # 自动值：等于 enable_victoria_metrics
+# cluster_ingress_class: "cilium"                  # 自动值：启用 cilium 时为 cilium，否则 traefik
+
+
+###################
+# 网络 - Cilium（CNI）
+###################
+
+enable_cilium: true
+
+# cilium_chart_version: "v1.19.3"                 # Helm chart 版本
+# cilium_cli_version: "v0.19.2"                   # cilium CLI 二进制
+# cilium_gateway_api_version: "v1.5.1"            # Gateway API CRD
+# cilium_hubble_cli_version: "v1.18.6"            # Hubble CLI 二进制
+# cilium_lb_ip_start: "192.168.4.20"               # LoadBalancer 地址池起点
+# cilium_lb_ip_stop: "192.168.4.100"               # LoadBalancer 地址池终点
+# cilium_ipam_cluster_pool: "10.42.0.0/16"         # Pod CIDR
+# cilium_log_level: "WARNING"                      # INFO | WARNING | ERROR | FATAL
+# cilium_hubble_relay_enabled: true
+# cilium_hubble_ui_enabled: true
+# cilium_ip_masq_agent_enabled: false              # 【一般无需开启】自定义 SNAT 例外规则的来源。
+                                                    # 默认关闭时，Pod 出公网走 bpf_masquerade：
+                                                    #   Pod → 公网    → SNAT 成节点 IP（Pod 能上网）
+                                                    #   Pod → Pod/Svc → 不 SNAT
+                                                    # 仅当需要让 Pod 访问某个内网 CIDR 时保留原
+                                                    # Pod IP（对端有基于源 IP 的 ACL / 审计），才开启
+                                                    # 并配置 non_masquerade_cidrs。
+                                                    # OpenStack / 端口安全启用的云环境：必须保持关闭。
+# cilium_non_masquerade_cidrs:                     # 仅当 ip_masq_agent_enabled=true 时生效
+#   - "10.42.0.0/16"                                #   Pod CIDR
+#   - "10.43.0.0/16"                                #   Service CIDR
+
+# --- 数据面 & 路由 ---
+# cilium_kube_proxy_replacement: true              # 用 eBPF 替换 kube-proxy
+# cilium_routing_mode: "tunnel"                    # native | tunnel
+# cilium_tunnel_protocol: "vxlan"                  # vxlan | geneve（仅 routing=tunnel 生效）
+# cilium_ipam_mode: "cluster-pool"                 # cluster-pool | kubernetes | multi-pool
+# cilium_datapath_mode: "netkit"                   # netkit（内核 >=6.7）| veth
+# cilium_bpf_masquerade: true                      # 【推荐保持 true】用 eBPF 执行 Pod 出站 SNAT。
+                                                    # 这才是让 Pod 能上公网的真正开关；关闭会导致
+                                                    # Pod IP 直接暴露到宿主机网卡，多数底层会丢包。
+# cilium_gateway_api_enabled: true                 # 通过 Cilium Gateway API 提供 Ingress
+# cilium_cni_exclusive: false                     # 是否让 Cilium 独占 /etc/cni/net.d/。默认 false：
+                                                    # Cilium 不主动重命名其他 CNI 配置文件，这样即使
+                                                    # 后续要加装 Multus / 其他 CNI 也不会发生冲突。
+                                                    # 仅当你确实希望 Cilium 剔除其他 CNI 配置时才设为 true。
+
+
+###################
+# 网络 - Multus（用于多网卡 Pod 的元 CNI）
+###################
+
+enable_multus: false
+
+# multus_image_tag: "v4.3.0"                       # ghcr.io/k8snetworkplumbingwg/multus-cni
+# multus_cni_config_file: "00-multus.conf"         # 排序必须早于 05-cilium.conflist
+
+
+###################
+# 网络 - Kube-OVN（通过 Multus 挂载的附加 CNI）
+###################
+
+enable_kube_ovn: false
+
+# kube_ovn_chart_version: "v1.16.2"               # Helm chart 版本（stable）
+# 当 Cilium 启用时（默认），Kube-OVN 以 non-primary CNI 运行。
+# 当 Cilium 被关闭时，Kube-OVN 会自动成为主 CNI。
+# 强制指定模式：
+# kube_ovn_non_primary_cni: true                   # 强制作为次级 CNI
+# kube_ovn_non_primary_cni: false                  # 强制作为主 CNI
+
+# Kube-OVN 不会成为主 CNI。它通过 Multus NetworkAttachmentDefinition
+# 作为额外网卡挂载，Cilium 仍然是默认网络。
+#
+# kube_ovn_pod_cidr: "10.18.0.0/16"                # 不能与 Cilium Pod CIDR 冲突
+# kube_ovn_svc_cidr: "10.96.0.0/12"                # Kube-OVN 内置 LB CIDR
+# kube_ovn_join_cidr: "100.64.0.0/16"              # 节点间隧道 CIDR
+# kube_ovn_net_stack: "ipv4"                       # ipv4 | ipv6 | dual_stack
+# kube_ovn_cni_config_priority: "10"               # 00=multus, 05=cilium, 10=kube-ovn
+# kube_ovn_enable_lb: false                        # OVN 内置 L4 LoadBalancer。默认 false：
+                                                    # Cilium 已经提供了 Service 转发和 LB IPAM，
+                                                    # non-primary 模式下再开一层 OVN LB 没有收益。
+                                                    # 仅当挂载到 OVN 子网的工作负载确实需要 OVN
+                                                    # 原生 LB 时再打开。
+# kube_ovn_enable_np: true                         # 通过 OVN ACL 实现 NetworkPolicy
+# kube_ovn_enable_nat_gw: true                     # 为 VPC 出站流量启用 NAT 网关
+
+
+###################
+# 网络 - CoreDNS
+###################
+
+enable_coredns: true
+
+# coredns_chart_version: "v1.45.2"                # Helm chart 版本
+# coredns_hpa_min_replicas: 1
+# coredns_hpa_max_replicas: 3
+
+
+###################
+# 网络 - ExternalDNS（Cloudflare）
+###################
+
+# 自动把集群里带有 external-dns 注解的 Service / Ingress / Gateway 同步到
+# 外部 DNS 服务商（当前 role 仅支持 Cloudflare）。示例：
+#   Service metadata.annotations:
+#     external-dns.alpha.kubernetes.io/hostname: grafana.noty.cc
+#   → 自动在 Cloudflare 写入 grafana.noty.cc A <LB IP>
+# 依赖：passwords.yaml 中的 credential_cloudflare_api_token；未填时 secrets
+# 工具会自动把 enable_external_dns 关掉，避免 CrashLoop。
+# 默认关闭：多数内网集群无对外域名，用不上。
+
+enable_external_dns: false
+
+# external_dns_chart_version: "v1.20.0"          # Helm chart 版本
+# external_dns_domain: "noty.cc"                   # 要管理的 DNS zone（填 "disabled" 可跳过部署）
+# external_dns_acme_server: "staging"              # staging | production（cert-manager ACME 端点）
+
+
+###################
+# 安全 - cert-manager
+###################
+
+enable_cert_manager: true
+
+# cert_manager_chart_version: "v1.20.2"          # Helm chart 版本
+# cert_manager_cli_version: "v2.4.1"              # cmctl CLI 二进制
+
+
+###################
+# 存储 - Longhorn
+###################
+
+enable_longhorn: true
+
+# longhorn_chart_version: "v1.11.1"              # Helm chart 版本
+# longhorn_cli_version: "v1.11.1"                # longhornctl CLI 二进制
+# longhorn_replica_count: 2                        # 卷副本数
+# longhorn_backup_enabled: true
+# longhorn_backup_target: "cifs://nas.noty.cc/backup"
+# longhorn_data_locality: "best-effort"            # best-effort | strict-local | disabled
+
+# --- 限制 Longhorn 副本只落在指定节点上（可选） ---
+# 默认所有 Longhorn 节点都可作副本候选。如果只想让某几台节点承载数据（例如
+# 只有这几台机器接了大容量磁盘），可以：
+#   1. 给这些节点打 Longhorn tag（tag 名称由你自定义）：
+#        longhornctl update node <node1> --tags data
+#        longhornctl update node <node2> --tags data
+#      （无 longhornctl 时可在 Longhorn UI 中操作）
+#   2. 告诉 chart 创建的默认 StorageClass 只从带此 tag 的节点选副本：
+#
+# longhorn_replica_node_tag: "data"                # 留空 = 所有节点都可作副本候选
+
+
+###################
+# 存储 - Ceph CSI（对接外部 Ceph 集群）
+###################
+
+enable_ceph_csi: false
+
+# ceph_csi_chart_version: "1.0.4"                 # Helm chart 版本
+
+# 用于连接**外部** Ceph 集群，不会新建 Ceph。
+# 前置条件：在 passwords.yaml 中配置 credential_ceph_admin_key（cephx admin key）
+#
+# ceph_csi_monitors:                                # Ceph monitor 地址
+#   - "10.0.0.1:6789"
+#   - "10.0.0.2:6789"
+#   - "10.0.0.3:6789"
+# ceph_csi_client_user: "admin"                     # cephx 客户端用户名
+# ceph_csi_rbd_pool: "rbd-pool"                     # RBD pool 名称
+# ceph_csi_cephfs_fsname: "cephfs"                 # CephFS 文件系统名（空 = 关闭）
+# ceph_csi_cephfs_enabled: false                   # 是否启用 CephFS 驱动
+
+
+###################
+# 可观测性 - metrics-server
+###################
+
+enable_metrics_server: true
+
+# metrics_server_chart_version: "v3.13.0"        # Helm chart 版本
+# metrics_server_tls_type: "cert-manager"          # cert-manager | helm | metrics-server
+
+
+###################
+# 可观测性 - VictoriaLogs
+###################
+# 完整说明（默认行为、存储选型、HA、故障排查）：docs/VICTORIA-METRICS.md
+
+enable_victoria_logs: true
+
+# victoria_logs_chart_version: "v0.12.0"         # Helm chart 版本
+# victoria_logs_retention: "7d"
+
+# --- 存储 ---
+# storage_class 默认继承 cluster_storage_class（Longhorn 启用时=longhorn，否则=local-path）。
+# 若要显式指定（如切换到外部 Ceph），取消下方注释：
+#
+# victoria_logs_storage_class: "longhorn"          # longhorn | ceph-rbd | local-path | ...
+# victoria_logs_storage_size: "5Gi"
+
+# --- 节点亲和（推荐配置） ---
+# VictoriaLogs 属于"资源可能持续增长"的系统服务（内存随日志量增长，磁盘随
+# retention 增长）。生产环境建议把它固定到几台独立节点上，避免与业务负载
+# 互相影响。步骤：
+#   1. 挑选 2~3 台节点专门跑可观测栈，给它们打 label（key/value 自定义）：
+#        kubectl label node <node1> <node2> role=observability
+#   2. 取消下方注释：
+#
+# victoria_logs_node_selector:
+#   role: observability                            # 与上一步 label 保持一致即可
+#
+# 未设置时不加任何调度约束，K8s 会把 vlsingle 调度到任意可用节点。
+
+
+###################
+# 可观测性 - VictoriaMetrics + Grafana + AlertManager
+###################
+# 完整说明（默认行为、存储选型、HA、故障排查）：docs/VICTORIA-METRICS.md
+
+enable_victoria_metrics: true
+# 注意，这里的VM不是虚拟机的缩写，而是 VictoriaMetrics 的简称。
+
+# victoria_metrics_chart_version: "v0.74.1"      # Helm chart 版本（victoria-metrics-k8s-stack）
+# victoria_metrics_prometheus_chart_version: "v28.0.1"  # prometheus-operator-crds 子 chart
+# victoria_metrics_retention: "72h"
+# victoria_metrics_cluster_enabled: false          # true = 应用层 HA（vmcluster），false = 单进程 vmsingle
+
+# --- 存储 ---
+# storage_class 默认继承 cluster_storage_class（Longhorn 启用时=longhorn，否则=local-path）。
+# 若要显式指定（如切换到外部 Ceph），取消下方注释：
+#
+# victoria_metrics_storage_class: "longhorn"       # longhorn | ceph-rbd | local-path | ...
+# victoria_metrics_storage_size: "50Gi"            # 作用于 vmsingle / vmstorage
+# victoria_metrics_aux_storage_size: "5Gi"         # 作用于 grafana / alertmanager / vmagent
+
+# --- 节点亲和（推荐配置） ---
+# VictoriaMetrics 属于"资源可能持续增长"的系统服务（vmsingle 内存 1~8+ GiB、
+# 磁盘 50 GiB+，且随 series 数增长）。生产环境建议把所有 VM 组件（vmsingle/
+# vmstorage/vmselect/vminsert/grafana/alertmanager/vmagent/vmalert）固定到
+# 几台独立节点上，避免与业务负载互相争抢资源。步骤：
+#   1. 挑选 2~3 台节点专门跑可观测栈，给它们打 label（key/value 自定义）：
+#        kubectl label node <node1> <node2> role=observability=
+#   2. 取消下方注释：
+#
+# victoria_metrics_node_selector:
+#   role: observability                            # 与上一步 label 保持一致即可
+#
+# 未设置时不加任何调度约束，K8s 会把 VM 组件调度到任意可用节点。
+
+
+###################
+# 应用管理 - ArgoCD
+###################
+
+enable_argo_cd: false
+
+# argo_cd_chart_version: "v9.5.2"                 # Helm chart 版本
+# argo_cd_cli_version: "v3.3.7"                   # argocd CLI 二进制
+# argo_cd_admin_enabled: false                     # 是否启用内置 admin 账号
+
+
+###################
+# 应用管理 - Kured
+###################
+
+enable_kured: false
+
+# kured_chart_version: "v5.11.0"                 # Helm chart 版本
+# kured_reboot_start: "04:00"
+# kured_reboot_end: "08:00"
+# kured_reboot_zone: "UTC"
+# kured_slack_enabled: true
+
+
+###################
+# 虚拟化 - KubeVirt
+###################
+
+enable_kubevirt: false
+
+# kubevirt_version: "v1.8.4"                     # KubeVirt operator + virtctl CLI
+# kubevirt_use_emulation: false                    # 软件模拟（无 /dev/kvm）
+# kubevirt_feature_gates:                          # 需启用的 feature gate 列表
+#   - ExpandDisks                                  #   在线扩容磁盘
+#   - NetworkBindingPlugins                         #   managedTap + 自定义绑定（Multus 多 CNI 场景必需）
+#   - HotplugVolumes                                #   不重启 VM 热插拔卷
+#   - CPUManager                                    #   接入 kubelet CPU manager，实现 vCPU 绑核
+# kubevirt_managedtap_enabled: true                 # managedTap 绑定插件（需要 NetworkBindingPlugins feature gate）
+# kubevirt_managedtap_domain_attachment_type: "managedTap"  # 仅支持 managedTap
+# kubevirt_default_network_interface: "masquerade" # masquerade | bridge | slirp
+# kubevirt_permitted_pci_host_devices:              # PCI 设备直通（如 GPU 直通到 VM）
+#   - pci_vendor_selector: "10de:1aef"              #   PCI vendor:device ID（lspci -nn 查询）
+#     resource_name: "nvidia.com/GA102_GEFORCE_RTX_3090"  # 集群唯一的资源名
+#     external_resource_provider: true              #   true = 设备由 gpu-operator 提供
+# kubevirt_permitted_mediated_devices: []           # vGPU/MDEV 直通（少用）
+
+
+###################
+# GPU - NVIDIA GPU Operator
+###################
+
+enable_gpu_operator: false
+
+# gpu_operator_chart_version: "v26.3.3"          # Helm chart 版本
+
+# GPU Operator 管理 NVIDIA driver、toolkit、device plugin 与 DCGM exporter。
+# 至少一个节点必须有 NVIDIA GPU 硬件。
+#
+# gpu_operator_nfd_enabled: true                    # Node Feature Discovery（自动识别 GPU 节点）
+# gpu_operator_cdi_enabled: true                    # Container Device Interface（KubeVirt 直通所需）
+# gpu_operator_driver_enabled: true                 # 通过容器安装驱动（false = 使用宿主机驱动）
+# gpu_operator_sandbox_workloads_enabled: true      # 是否把 GPU 暴露给沙箱运行时（KubeVirt VM）。
+                                                    # 全局"开门"开关 —— 将 GPU 注册为 sandbox 设备。
+                                                    # 本身不改变 GPU 行为；真正激活 VM 直通需要
+                                                    # 给节点打 label：
+                                                    #   nvidia.com/gpu.workload.config=vm-passthrough
+                                                    # （gpu-operator 看到该 label 会跳过宿主机驱动）
+                                                    # 还需配合 `kubevirt_permitted_pci_host_devices`
+                                                    # 注册设备，并在 VM spec 中通过 `devices.gpus` 申请。
+                                                    # 默认 true：本项目为 KubeVirt-first。
+                                                    # 仅给 Pod 用 GPU 时设为 false。
+# gpu_operator_sandbox_workloads_mode: "kubevirt"   # kubevirt | kata（仅当 sandbox=true 时生效）
+# gpu_operator_mig_enabled: false                  # Multi-Instance GPU（MIG）
+# gpu_operator_mig_strategy: "single"              # single | mixed
+# gpu_operator_time_slicing_enabled: false          # GPU 时间分片
+# gpu_operator_time_slicing_replicas: 1            # 每块 GPU 承载的 Pod 数
+# gpu_operator_dcgm_exporter_enabled: true          # 将 GPU 指标暴露给 VictoriaMetrics
+
+
+###################
+# 集群系统服务（基础 OS 功能）
+###################
+
+# cluster_postfix_enabled: false                   # 通过 iCloud SMTP 转发邮件（false = 关闭）
+# cluster_unattended_upgrades_enabled: false        # 自动安全更新（false = 关闭）
+# cluster_device_enabled: false                    # USB 存储 TRIM hack（Pi + USB SSD 场景；x86 关闭）
+
+
+###################
+# Kubelet 高级调优（CPU / memory / topology manager）
+###################
+
+# kubelet-arg 由三部分拼接（见 group_vars/all/main.yaml）：
+#   common_args + preset(pod|kubevirt) + override
+# override 分两级：group_vars/<group>.yaml（组内所有节点）
+# + host_vars/<node>.yaml（单机，追加而非替换）。
+# 所有条目都是原始字符串，原样渲染 —— 不做任何验证。
+#
+# kubelet 配置应用前会自动运行 precheck（roles/k3s/tasks/precheck.yaml）。
+# 它检测 cpu-manager-policy 是否正在变化（static ↔ none），如果发现
+# 节点上有运行中的 KubeVirt VM 则失败 —— kubelet 重启会杀掉这些 VM。
+# API 查询委托给 server 节点执行（server 有 kubeconfig）。首次部署和
+# KubeVirt 未启用时跳过。
+
+# --- Pod 节点（group_vars/pod.yaml）---
+# 默认：空 —— kubelet 用内置默认值（无 CPU/内存绑核）。
+# Pod 节点通常不需要 static CPU，除非跑延迟敏感型工作负载（数据库、
+# ML 推理）。需要时在此添加：
+#
+# pod_kubelet_override: []
+
+# --- KubeVirt 节点（group_vars/kubevirt.yaml）---
+# 预设已启用 static CPU + restricted topology。在此添加组级
+# 参数（作用于所有 kubevirt 节点）：
+#
+# kubevirt_kubelet_override:
+#   - cpu-manager-policy=static
+#   - topology-manager-policy=restricted
+#   - reserved-cpus=4
+#   - feature-gates=CPUManagerPolicyAlphaOptions=true
+#   - cpu-manager-policy-options=distribute-cpus-across-numa=true
+#   # - memory-manager-policy=Static
+#   # - system-reserved=memory=4Gi
+#   # - kube-reserved=memory=4Gi
+#   # - reserved-memory=0:memory=1Gi;1:memory=1Gi;2:memory=1Gi;3:memory=1Gi;4:memory=1Gi;5:memory=1Gi;6:memory=1Gi;7:memory=1Gi
+
+# --- 单机级（host_vars/<node>.yaml）---
+# 追加到上面的组级 override（不替换）。
+# 用于硬件相关设置如 reserved_cpus：
+#
+# kubevirt_kubelet_override_host:
+#   - reserved-cpus=0,1
+
+
+###################
+# Pod 资源分层（kolla 风格全局资源档位）
+###################
+
+# 所有 role 统一引用下方三档档位，不再硬编码资源限额。
+# 默认按裸金属（96 核 / 512GB+）尺寸设定。
+# 修改任一档位即可整体缩放。
+#
+# cluster_pod_resources:
+#   small:                                    # sidecar、operator、controller、multus
+#     limits: {cpu: 1, memory: 512Mi}
+#     requests: {cpu: 100m, memory: 256Mi}
+#   medium:                                   # 各类 agent（cilium、grafana、vlogs、vmagent）
+#     limits: {cpu: 2, memory: 2Gi}
+#     requests: {cpu: 500m, memory: 1Gi}
+#   large:                                    # 存储后端（vmsingle、vmstorage、vmcluster）
+#     limits: {cpu: 4, memory: 8Gi}
+#     requests: {cpu: 1, memory: 4Gi}

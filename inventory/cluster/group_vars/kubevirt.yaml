@@ -1,0 +1,44 @@
+---
+# ========================================================================
+# group_vars/kubevirt.yaml
+#
+# Applied to all hosts in the `kubevirt` group (see hosts.yaml).
+# These nodes may run KubeVirt VMs.
+#
+# The kubelet-arg list is auto-built in roles/k3s/tasks/facts.yaml:
+#   common_args + kubevirt preset + kubevirt_kubelet_override
+#                                  + kubevirt_kubelet_override_host
+#
+# The kubevirt preset (defined in group_vars/all/main.yaml) enables:
+#   cpu-manager-policy=static
+#   topology-manager-policy=restricted
+#   feature-gates=CPUManagerPolicyAlphaOptions=true
+#   cpu-manager-policy-options=distribute-cpus-across-numa=true
+#
+# To add args for ALL kubevirt nodes, set `kubevirt_kubelet_override` here.
+# Entries are appended verbatim — no validation, kubelet handles conflicts.
+# Example — reserve CPU 0 for system daemons on every kubevirt node:
+#   kubevirt_kubelet_override:
+#     - reserved-cpus=0
+#
+# To add args for ONE kubevirt node (hardware-specific, e.g. reserved_cpus),
+# set `kubevirt_kubelet_override_host` in host_vars/<node>.yaml.
+# It is ADDED to (not replaces) the group-level override.
+#   numactl --hardware    # shows CPU -> NUMA node mapping
+#   lscpu -e              # shows which CPUs are online
+# Example (host_vars/helios.yaml):
+#   kubevirt_kubelet_override_host:
+#     - reserved-cpus=0,1
+#     - memory-manager-policy=Static
+#     - reserved-memory=0:memory=1Gi;1:memory=1Gi
+#
+# Switching a node between `pod` and `kubevirt` groups requires:
+#   1. cordon + drain the node:
+#        kubectl cordon <node> && kubectl drain <node> --ignore-daemonsets
+#   2. Move the host entry in hosts.yaml between groups
+#   3. Re-run: ansible-playbook provisioning.yaml -t k3s
+#   4. uncordon:
+#        kubectl uncordon <node>
+# kubelet will restart with the new args; running workloads are evicted
+# by the drain in step 1.
+# ========================================================================

@@ -1,0 +1,31 @@
+---
+# ========================================================================
+# group_vars/pod.yaml
+#
+# Applied to all hosts in the `pod` group (see hosts.yaml).
+# These are pure Pod worker nodes — kubelet uses its built-in defaults
+# (cpuManagerPolicy=none, topologyManagerPolicy=none).
+#
+# The kubelet-arg list is auto-built in roles/k3s/tasks/facts.yaml:
+#   common_args + pod preset (empty) + pod_kubelet_override
+#                                      + pod_kubelet_override_host
+#
+# To add args for ALL pod nodes, set `pod_kubelet_override` here.
+# Entries are appended verbatim — no validation.
+#
+# Example — enable static CPU pinning for high-performance Pod workloads
+# (databases, ML inference) on every pod node:
+#   pod_kubelet_override:
+#     - cpu-manager-policy=static
+#
+# For full NUMA-aligned pinning (stricter scheduling):
+#   pod_kubelet_override:
+#     - cpu-manager-policy=static
+#     - topology-manager-policy=restricted
+#     - feature-gates=CPUManagerPolicyAlphaOptions=true
+#     - cpu-manager-policy-options=distribute-cpus-across-numa=true
+#
+# To add args for ONE pod node (hardware-specific), set
+# `pod_kubelet_override_host` in host_vars/<node>.yaml.
+# It is ADDED to (not replaces) the group-level override.
+# ========================================================================

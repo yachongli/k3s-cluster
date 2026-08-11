@@ -3,6 +3,11 @@
 ansible.log
 validation.log
 
+# User-provided inventory (copied from hosts-sample.yaml)
+inventory/cluster/hosts.yaml
+# User-provided globals overrides (copied from globals-sample.yaml)
+inventory/cluster/group_vars/all/globals.yaml
+
 # Claude
 .claude/
 

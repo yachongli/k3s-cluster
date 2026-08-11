@@ -1,0 +1,401 @@
+---
+ansible_user: root
+# -- ansible_password and ansible_become_password are OPTIONAL.
+# Default deployment model: SSH key authentication + passwordless sudo.
+# Set them in globals.yaml only if your target hosts require password auth
+# (ansible_password) or sudo password (ansible_become_password).
+# See passwords.yaml for vault-encrypted application/component credentials.
+
+# -- Temporary deploy-time proxy. Set cluster_deploy_proxy in globals.yaml
+# to route helm/git downloads through a proxy during playbook execution.
+# Not written to target hosts — only active during the Ansible run.
+# Injected via `environment` at play level in each playbook.
+_proxy_environment: >-
+  {{
+    {
+      'http_proxy': cluster_deploy_proxy | default(''),
+      'https_proxy': cluster_deploy_proxy | default(''),
+      'HTTP_PROXY': cluster_deploy_proxy | default(''),
+      'HTTPS_PROXY': cluster_deploy_proxy | default('')
+    } if (cluster_deploy_proxy | default('') | length > 0) else {}
+  }}
+
+# -- Environment for apt tasks. By default apt bypasses the deploy proxy
+# (set cluster_apt_proxy: true to enable). Other tasks (helm, git, get_url)
+# always use _proxy_environment when cluster_deploy_proxy is set.
+_apt_environment: >-
+  {{
+    _proxy_environment if (cluster_apt_proxy | default(false) | bool) else {}
+  }}
+
+# ============================================================
+# Default values for globals.yaml overrides.
+# Single source of truth for all repo baseline values.
+# Do NOT edit here for per-cluster tuning -- edit globals.yaml.
+# Edit here only to change what "no override" means.
+# ============================================================
+defaults:
+  cluster:
+    api_host: '192.168.4.10'
+    tls_san_extra: []
+    domain: cluster.local
+    # -- Registry mirror endpoint. Set to your local registry (e.g. Harbor,
+    # Nexus, or docker-registry) to proxy all image pulls through one host.
+    # Leave empty to pull directly from upstream registries.
+    # When set, all registries below are mirrored to this endpoint.
+    registry:
+      endpoint: '{{ cluster_registry_endpoint | default("") }}'
+      # -- Registries to mirror. Add or remove as needed.
+      mirrors:
+        - docker.io
+        - gcr.io
+        - ghcr.io
+        - quay.io
+        - registry.k8s.io
+        - nvcr.io
+    # -- Auto-detected from ansible_facts.machine via cluster_map (set in
+    # roles/cluster/tasks/facts.yaml). Override with `cluster_architecture`.
+    # Fallback (before cluster facts run): x86_64.
+    architecture: >-
+      {{ cluster_architecture
+         | default((cluster_map.architecture.machine) if (cluster_map is defined) else "x86_64") }}
+    # -- Normalized binary suffix (arm64, amd64, arm) derived from architecture.
+    architecture_binary: >-
+      {%- set m = cluster_architecture | default((cluster_map.architecture.machine) if (cluster_map is defined) else "x86_64") -%}
+      {%- if m == 'aarch64' -%}arm64
+      {%- elif m == 'x86_64' -%}amd64
+      {%- elif m == 'armv7l' -%}arm
+      {%- else -%}amd64
+      {%- endif -%}
+    network_interface: eth0
+    postfix_enabled: false
+    unattended_upgrades_enabled: false
+    # -- Derived defaults (react to enable_* switches, overridable via cluster_*).
+    # Storage class: Longhorn if enabled, K3s built-in local-path otherwise.
+    # Override with `cluster_storage_class: <name>` to force one for all storage components.
+    storage_class: '{{ cluster_storage_class | default((enable_longhorn | default(true)) | ternary("longhorn", "local-path")) }}'
+    # ServiceMonitor: only useful if VictoriaMetrics is deployed.
+    # Override with `cluster_service_monitor_enabled: true|false`.
+    service_monitor_enabled: '{{ cluster_service_monitor_enabled | default(enable_victoria_metrics | default(true)) }}'
+    # Ingress class: Cilium if enabled, K3s built-in traefik otherwise.
+    # Override with `cluster_ingress_class: <name>`.
+    ingress_class: '{{ cluster_ingress_class | default((enable_cilium | default(true)) | ternary("cilium", "traefik")) }}'
+    # -- CNI exclusivity. Default: false, so Cilium does NOT rename other CNI
+    # configs in /etc/cni/net.d/. This keeps the cluster future-proof: you can
+    # add Multus later without a race where Cilium wipes 00-multus.conf.
+    # Only enable this if you want Cilium to actively evict foreign CNI files.
+    # Override with `cilium_cni_exclusive: true|false`.
+    cni_exclusive: '{{ cilium_cni_exclusive | default(false) }}'
+    # -- Kubelet advanced tuning. kubelet-arg is built from three parts:
+    #   1. common_args — always present (shared by all nodes)
+    #   2. preset      — auto-selected by group membership:
+    #                       pod group      → defaults.cluster.kubelet.pod
+    #                       kubevirt group → defaults.cluster.kubelet.kubevirt
+    #   3. override    — two-level, so host_vars ADDS to (not replaces)
+    #                    the group-level override:
+    #                       pod nodes:      pod_kubelet_override      (group_vars/pod.yaml)
+    #                                      + pod_kubelet_override_host (host_vars/<node>.yaml)
+    #                       kubevirt nodes: kubevirt_kubelet_override      (group_vars/kubevirt.yaml)
+    #                                      + kubevirt_kubelet_override_host (host_vars/<node>.yaml)
+    # All entries are raw strings rendered verbatim into kubelet-arg:.
+    # No relationship validation — kubelet handles conflicts (last wins).
+    kubelet:
+      # -- Common kubelet args (always present, all nodes)
+      common_args:
+        - runtime-request-timeout=15m
+        - container-log-max-files=3
+        - container-log-max-size=10Mi
+      # -- Pod worker preset (no CPU/memory pinning).
+      # Empty by default — kubelet uses its built-in defaults.
+      pod: []
+      # -- KubeVirt worker preset (static CPU + restricted topology for VM
+      # CPU pinning with NUMA alignment). Pods can still schedule here —
+      # static/restricted policies only affect Guaranteed QoS pods/VMs.
+      kubevirt:
+        - cpu-manager-policy=static
+        - topology-manager-policy=restricted
+        - feature-gates=CPUManagerPolicyAlphaOptions=true
+        - cpu-manager-policy-options=distribute-cpus-across-numa=true
+    # -- Pod resource tiers. All roles reference these instead of hardcoding.
+    # Override via `cluster_pod_resources` in globals.yaml to scale at once.
+    # Sized for bare-metal servers (96-core / 512GB+ class).
+    pod_resources:
+      small:
+        limits: {cpu: 1, memory: 512Mi}
+        requests: {cpu: 100m, memory: 256Mi}
+      medium:
+        limits: {cpu: 2, memory: 2Gi}
+        requests: {cpu: 500m, memory: 1Gi}
+      large:
+        limits: {cpu: 4, memory: 8Gi}
+        requests: {cpu: 1, memory: 4Gi}
+  cilium:
+    lb_ip_start: '192.168.4.20'
+    lb_ip_stop: '192.168.4.100'
+    ipam_cluster_pool: '10.42.0.0/16'
+    log_level: WARNING
+    hubble_relay_enabled: true
+    hubble_ui_enabled: true
+    ip_masq_agent_enabled: false
+    # -- Replace kube-proxy with Cilium eBPF-based service handling.
+    # false = keep kube-proxy running alongside Cilium.
+    kube_proxy_replacement: true
+    # -- Pod-to-pod routing. Valid: native | tunnel
+    # native  = direct L3 routing (requires L2 adjacency or L3 routes between nodes)
+    # tunnel  = VXLAN/Geneve encapsulation (works across any underlay)
+    routing_mode: tunnel
+    # -- Tunnel protocol (only used when routing_mode=tunnel). Valid: vxlan | geneve
+    tunnel_protocol: vxlan
+    # -- IP allocation mode. Valid: cluster-pool | kubernetes | multi-pool
+    # cluster-pool = Cilium manages CIDR pool (default, works standalone)
+    # kubernetes   = read PodCIDR from Node.spec (K3s-managed CIDR)
+    # multi-pool   = advanced, multiple pools with CRDs
+    ipam_mode: cluster-pool
+    # -- Datapath mode. Valid: netkit | veth
+    # netkit requires kernel >= 6.7; veth works everywhere but is slower.
+    datapath_mode: netkit
+    # -- Source NAT for pod egress traffic via eBPF.
+    bpf_masquerade: true
+    # -- Cilium Gateway API controller (Ingress/HTTPRoute).
+    gateway_api_enabled: true
+    # -- CNI config exclusivity. true = Cilium renames other CNI configs to
+    # *.cilium_bak. false = coexist with Multus (recommended when enable_multus).
+    cni_exclusive: '{{ defaults.cluster.cni_exclusive }}'
+  multus:
+    # -- Image tag for multus-cni (ghcr.io/k8snetworkplumbingwg/multus-cni).
+    image_tag: v4.3.0
+    # -- CNI config file name on host (must sort before Cilium's 05-cilium.conflist).
+    cni_config_file: 00-multus.conf
+    # -- Namespace for multus DaemonSet.
+    namespace: kube-system
+  kube_ovn:
+    # -- Pod CIDR for Kube-OVN overlay (must not conflict with Cilium's Pod CIDR)
+    pod_cidr: '10.18.0.0/16'
+    pod_gateway: '10.18.0.1'
+    # -- Service CIDR for Kube-OVN internal LB
+    svc_cidr: '10.96.0.0/12'
+    # -- Join CIDR for node-to-node tunnel
+    join_cidr: '100.64.0.0/16'
+    # -- IP stack: ipv4, ipv6, dual_stack
+    net_stack: ipv4
+    # -- CNI config file priority (00=multus, 05=cilium, 10=kube-ovn)
+    # Kube-OVN is NEVER the primary CNI; it only attaches as additional interface via Multus.
+    cni_config_priority: '10'
+    # -- Enable embedded OVN LoadBalancer.
+    # Default: false. Cilium already provides Service handling via eBPF and
+    # LoadBalancer IPs via the LB IPAM pool; the OVN LB would only add a
+    # parallel implementation with no benefit for the default non-primary
+    # deployment. Set to true only if you specifically want OVN's L4 LB for
+    # workloads attached to Kube-OVN subnets.
+    enable_lb: false
+    # -- Enable NetworkPolicy via OVN ACL
+    enable_np: true
+    # -- Enable NAT gateway for VPC egress
+    enable_nat_gw: true
+  coredns:
+    hpa_min_replicas: 1
+    hpa_max_replicas: 3
+  external_dns:
+    domain: noty.cc
+    acme_server: staging
+  longhorn:
+    replica_count: 2
+    backup_enabled: true
+    backup_target: cifs://nas.noty.cc/backup
+    data_locality: best-effort
+    # -- Constrain where Longhorn v1 volumes place their replicas. Space-separated
+    # list of Longhorn node tags; only nodes carrying every listed tag are eligible.
+    # Empty = every node is a replica candidate (default). To limit replicas to
+    # specific nodes (e.g. only those with large disks), tag those nodes with an
+    # arbitrary label like `data` via longhornctl or the UI, then set:
+    # `longhorn_replica_node_tag: "data"`.
+    replica_node_tag: ''
+  ceph_csi:
+    # -- External Ceph monitor addresses (IP:port). Must be set to enable.
+    monitors: []
+    # -- Cephx client user name (e.g. "admin", "kube")
+    client_user: admin
+    # -- RBD pool name for block storage
+    rbd_pool: ''
+    # -- CephFS filesystem name (empty = disable CephFS driver)
+    cephfs_fsname: ''
+    # -- Enable CephFS driver
+    cephfs_enabled: false
+  metrics_server:
+    tls_type: cert-manager
+  victoria_logs:
+    storage_class: '{{ defaults.cluster.storage_class }}'
+    storage_size: 5Gi
+    retention: 7d
+    # -- Pin the stateful `vlsingle` server Pod to specific nodes. Combine with
+    # Longhorn replica tag placement so the PVC replicas live on the same nodes
+    # (see defaults.longhorn.system_managed_components_node_selector below).
+    # Empty = no pinning (default behaviour).
+    node_selector: {}
+    tolerations: []
+  victoria_metrics:
+    storage_class: '{{ defaults.cluster.storage_class }}'
+    storage_size: 50Gi
+    aux_storage_size: 5Gi
+    retention: 72h
+    cluster_enabled: false
+    # -- Pin all stateful VM Pods (vmsingle | vmstorage/vmselect/vminsert |
+    # grafana | alertmanager | vmagent | vmalert) to specific nodes. Combine
+    # with Longhorn replica tag placement so PVC data lives on the same nodes.
+    # Empty = no pinning (default behaviour).
+    node_selector: {}
+    tolerations: []
+  argo_cd:
+    admin_enabled: false
+  kured:
+    reboot_start: '04:00'
+    reboot_end: '08:00'
+    reboot_zone: UTC
+    slack_enabled: true
+  kubevirt:
+    use_emulation: false
+    # -- Feature gates enabled by default.
+    # See: https://kubevirt.io/user-guide/operations/feature_gates/
+    # DownwardMetrics    : expose host metrics to VMs
+    # ExpandDisks        : allow online disk resize
+    # NetworkBindingPlugins : enable managedTap and custom network bindings (needed for Multus multi-CNI)
+    feature_gates:
+      - ExpandDisks
+      - NetworkBindingPlugins
+      - HotplugVolumes
+      - CPUManager
+    # -- managedTap network binding. Activates the managedTap binding plugin
+    # required by the `NetworkBindingPlugins` feature gate. When enabled, the
+    # KubeVirt CR is patched with:
+    #   spec.configuration.network.binding.managedtap.domainAttachmentType: managedTap
+    managedtap_enabled: true
+    managedtap_domain_attachment_type: managedTap
+    # -- Default network interface type for VMs.
+    # masquerade = default (works with Cilium)
+    # bridge     = use when VMs need L2 access (e.g. Kube-OVN underlay)
+    default_network_interface: masquerade
+    # -- Permitted host devices for PCI/mediated device passthrough to VMs.
+    # Empty by default — populate with PCI host devices (GPU passthrough) or
+    # mediated devices (vGPU/MDEV) when enabling KubeVirt device assignment.
+    # See: https://kubevirt.io/user-guide/operations/host_dev_assignment/
+    permitted_pci_host_devices: []
+    permitted_mediated_devices: []
+  gpu_operator:
+    # -- Node Feature Discovery (auto-detect GPU nodes)
+    nfd_enabled: true
+    # -- Container Device Interface (required for KubeVirt GPU passthrough)
+    cdi_enabled: true
+    # -- Install NVIDIA driver via container (false = use host-installed driver)
+    driver_enabled: true
+    # -- Expose GPU to sandboxed runtimes (KubeVirt VMs).
+    # This is a global "gate" — it tells gpu-operator to register GPUs as
+    # sandbox devices, but does NOT change GPU behaviour by itself.
+    # Actual VM passthrough activation requires per-node label:
+    #   nvidia.com/gpu.workload.config=vm-passthrough
+    # (gpu-operator skips host driver on these nodes)
+    # Plus `kubevirt_permitted_pci_host_devices` registration + VM spec request.
+    # Default true: project is KubeVirt-first, so most gpu-operator users want
+    # VM passthrough ready-to-go without redeploying the chart.
+    sandbox_workloads_enabled: true
+    sandbox_workloads_mode: kubevirt
+    # -- MIG (Multi-Instance GPU)
+    mig_enabled: false
+    mig_strategy: single
+    # -- GPU time-slicing
+    time_slicing_enabled: false
+    time_slicing_replicas: 1
+    # -- DCGM exporter (GPU metrics for VictoriaMetrics)
+    dcgm_exporter_enabled: true
+
+global_map:
+  ansible:
+    version: 2.19.0
+  # -- Credentials are vault-encrypted in passwords.yaml as flat variables.
+  # This map bridges them to the nested structure expected by role templates.
+  credentials:
+    argocd:
+      server:
+        admin:
+          password: '{{ password_argocd_admin }}'
+        user:
+          name: floren
+          password: '{{ password_argocd_user }}'
+    cluster:
+      postfix:
+        user:
+          alias: '{{ credential_postfix_alias }}'
+          name: '{{ credential_postfix_name }}'
+          password: '{{ credential_postfix_password }}'
+    externaldns:
+      cloudflare:
+        api:
+          token: '{{ credential_cloudflare_api_token }}'
+    kured:
+      slack:
+        notify:
+          url: '{{ credential_slack_webhook_url }}'
+    longhorn:
+      backup:
+        user:
+          name: floren
+          password: '{{ credential_longhorn_backup_password }}'
+    victoriametrics:
+      grafana:
+        user:
+          name: admin
+          password: '{{ password_grafana_admin }}'
+  tags:
+    charts:
+      - cilium
+      - multus
+      - kube-ovn
+      - coredns
+      - cert-manager
+      - external-dns
+      - argo-cd
+      - kured
+      - longhorn
+      - ceph-csi
+      - metrics-server
+      - victoria-logs
+      - victoria-metrics
+      - kubevirt
+      - gpu-operator
+    play:
+      - charts
+      - cluster
+      - kubernetes
+    postinstall:
+      - cilium
+      - multus
+      - kube-ovn
+      - coredns
+      - cert-manager
+      - external-dns
+      - argo-cd
+      - kured
+      - longhorn
+      - ceph-csi
+      - metrics-server
+      - victoria-logs
+      - kubevirt
+      - gpu-operator
+    role:
+      - argo-cd
+      - ceph-csi
+      - cert-manager
+      - cilium
+      - cluster
+      - coredns
+      - external-dns
+      - gpu-operator
+      - helm
+      - k3s
+      - kube-ovn
+      - kubevirt
+      - kured
+      - longhorn
+      - metrics-server
+      - multus
+      - victoria-logs
+      - victoria-metrics

@@ -1,0 +1,505 @@
+---
+# ========================================================================
+# k3s-cluster globals.yaml (kolla-style)
+#
+# Central override file. Default values live in `all.yaml` under the
+# top-level `defaults:` map; uncomment lines below to override them.
+# Secrets live in `all.yaml` (vault-encrypted).
+#
+# Convention:
+#   enable_<component>: true|false   # toggle chart deployment
+#   <component>_<param>: value       # override defaults.<component>.<param>
+# ========================================================================
+
+
+###################
+# Cluster fundamentals
+###################
+
+# --- SSH / Ansible connection (all optional) ---
+# Default deployment model: SSH key authentication + passwordless sudo.
+# Uncomment ONLY if your target hosts require password-based auth.
+# For one-off runs, prefer `ansible-playbook --ask-pass --ask-become-pass`
+# instead of storing plaintext passwords in this file.
+#
+# ansible_user: "root"                             # SSH user (default in all.yaml: root)
+# ansible_password: "your-ssh-password"            # only if password SSH is required
+# ansible_become_password: "your-sudo-password"    # only if sudo needs a password
+
+# --- Cluster identity ---
+cluster_api_host: "192.168.4.10"                   # REQUIRED: LB / K3s API VIP (no default)
+
+# cluster_tls_san_extra: []                        # extra TLS SAN entries
+# cluster_domain: "cluster.local"                   # cluster DNS domain
+# cluster_architecture: "x86_64"                    # x86_64 | aarch64 (auto-detected from ansible_facts)
+# network_interface: "eth0"                         # NIC that Keepalived binds the API VIP to on server
+                                                    # nodes. Must exist on every server host and carry
+                                                    # the same L2 broadcast domain as cluster_api_host.
+
+# --- Core binary versions ---
+# helm_version: "v3.20.0-1"                       # Helm CLI (Debian package)
+# helm_diff_plugin_version: "v3.15.6"             # helm-diff plugin
+# k3s_version: "v1.34.6+k3s1"                     # K3s binary
+# kubepug_version: "v1.7.1"                       # API deprecation checker
+
+# --- HTTP/HTTPS proxy ---
+# Two modes available:
+#
+# 1. Deploy-time proxy (temporary, recommended for most users)
+#    Only active during Ansible playbook execution. Not written to hosts.
+#    Helm and git downloads route through the proxy during deployment.
+#    apt bypasses the proxy by default (set cluster_apt_proxy: true to enable).
+#
+# cluster_deploy_proxy: "http://10.0.0.1:7890"
+# cluster_apt_proxy: false                          # set true to route apt through proxy
+#
+# 2. Persistent proxy (written to target hosts)
+#    Writes /etc/profile.d/proxy.sh, systemd drop-ins, and git config.
+#    Use when hosts permanently need a proxy (e.g. containerd pulls).
+#    To remove: clear the variable and re-run the playbook.
+#
+# cluster_http_proxy: "http://10.0.0.1:7890"
+# cluster_https_proxy: "http://10.0.0.1:7890"
+# cluster_no_proxy:
+#   - "127.0.0.1,localhost"
+#   - "10.0.0.0/8"          # service & pod CIDR
+#   - "192.168.0.0/16"      # LAN
+#   - "cluster.local"        # cluster DNS
+
+# --- Registry mirror ---
+# Set to your local registry to proxy all image pulls through one host.
+# When set, all registries (docker.io, ghcr.io, nvcr.io, ...) are mirrored
+# to this endpoint. Leave empty to pull directly from upstream.
+#
+# cluster_registry_endpoint: "http://10.254.25.5:4000"
+
+# --- Helm plugin mirror (helm-diff) ---
+# Override the helm-diff plugin download URL when GitHub is slow or
+# unreachable (e.g. China mainland). Default uses GitHub upstream.
+#
+# helm_plugin_diff_url: "https://gitee.com/mirrors_databus23/helm-diff"
+
+# --- Cluster-wide derived defaults ---
+# These auto-adapt to enable_* switches. Override to force a specific value
+# across ALL dependent components (see per-component sections for finer control).
+#
+# cluster_storage_class: "longhorn"                # or "local-path", "rook-ceph", ...
+#                                                  # auto: longhorn if enable_longhorn else local-path
+# cluster_service_monitor_enabled: true            # auto: enable_victoria_metrics
+# cluster_ingress_class: "cilium"                  # auto: cilium if enable_cilium else traefik
+
+
+###################
+# Networking - Cilium (CNI)
+###################
+
+enable_cilium: true
+
+# cilium_chart_version: "v1.19.3"                 # Helm chart version
+# cilium_cli_version: "v0.19.2"                   # cilium CLI binary
+# cilium_gateway_api_version: "v1.5.1"            # Gateway API CRDs
+# cilium_hubble_cli_version: "v1.18.6"            # Hubble CLI binary
+# cilium_lb_ip_start: "192.168.4.20"               # LoadBalancer IP pool start
+# cilium_lb_ip_stop: "192.168.4.100"               # LoadBalancer IP pool stop
+# cilium_ipam_cluster_pool: "10.42.0.0/16"         # Pod CIDR
+# cilium_log_level: "WARNING"                      # INFO | WARNING | ERROR | FATAL
+# cilium_hubble_relay_enabled: true
+# cilium_hubble_ui_enabled: true
+# cilium_ip_masq_agent_enabled: false              # [Usually leave off] Selects the SOURCE of SNAT
+                                                    # exception rules. When disabled, Pod-to-internet
+                                                    # SNAT is handled by bpf_masquerade:
+                                                    #   Pod → internet  → SNAT to node IP (Pod egress works)
+                                                    #   Pod → Pod/Svc   → no SNAT
+                                                    # Enable ONLY if you need Pods to reach a specific
+                                                    # internal CIDR with the original Pod IP preserved
+                                                    # (source-IP ACLs, audit, asymmetric routing).
+                                                    # OpenStack / port-security clouds: KEEP OFF.
+# cilium_non_masquerade_cidrs:                     # only used when ip_masq_agent_enabled=true
+#   - "10.42.0.0/16"                                #   Pod CIDR
+#   - "10.43.0.0/16"                                #   Service CIDR
+
+# --- Datapath & routing ---
+# cilium_kube_proxy_replacement: true              # replace kube-proxy with eBPF
+# cilium_routing_mode: "tunnel"                    # native | tunnel
+# cilium_tunnel_protocol: "vxlan"                  # vxlan | geneve (used when routing=tunnel)
+# cilium_ipam_mode: "cluster-pool"                 # cluster-pool | kubernetes | multi-pool
+# cilium_datapath_mode: "netkit"                   # netkit (kernel >=6.7) | veth
+# cilium_bpf_masquerade: true                      # [Keep true] eBPF engine that actually SNATs
+                                                    # Pod egress. This is what lets Pods reach the
+                                                    # internet; disabling exposes raw Pod IPs on the
+                                                    # host NIC and most underlays will drop them.
+# cilium_gateway_api_enabled: true                 # Ingress via Cilium Gateway API
+# cilium_cni_exclusive: false                     # Whether Cilium claims exclusive ownership of
+                                                    # /etc/cni/net.d/. Default false: Cilium does NOT
+                                                    # rename other CNI configs, so adding Multus (or
+                                                    # any other CNI) later works without a race.
+                                                    # Set to true only if you deliberately want Cilium
+                                                    # to evict foreign CNI files.
+
+
+###################
+# Networking - Multus (meta-CNI for multi-network pods)
+###################
+
+enable_multus: false
+
+# multus_image_tag: "v4.3.0"                       # ghcr.io/k8snetworkplumbingwg/multus-cni
+# multus_cni_config_file: "00-multus.conf"         # must sort before 05-cilium.conflist
+
+
+###################
+# Networking - Kube-OVN (additional CNI via Multus)
+###################
+
+enable_kube_ovn: false
+
+# kube_ovn_chart_version: "v1.16.2"               # Helm chart version (stable)
+# Kube-OVN runs as non-primary CNI when Cilium is enabled (default).
+# When Cilium is disabled, Kube-OVN becomes the primary CNI automatically.
+# Override to force a specific mode:
+# kube_ovn_non_primary_cni: true                   # force secondary CNI
+# kube_ovn_non_primary_cni: false                  # force primary CNI
+
+# Kube-OVN is NEVER the primary CNI. It attaches as an additional network
+# interface via Multus NetworkAttachmentDefinition. Cilium remains the default.
+#
+# kube_ovn_pod_cidr: "10.18.0.0/16"                # must not conflict with Cilium Pod CIDR
+# kube_ovn_svc_cidr: "10.96.0.0/12"                # Kube-OVN internal LB CIDR
+# kube_ovn_join_cidr: "100.64.0.0/16"              # node-to-node tunnel CIDR
+# kube_ovn_net_stack: "ipv4"                       # ipv4 | ipv6 | dual_stack
+# kube_ovn_cni_config_priority: "10"               # 00=multus, 05=cilium, 10=kube-ovn
+# kube_ovn_enable_lb: false                        # OVN embedded L4 LoadBalancer. Default false:
+                                                    # Cilium already provides Service + LB IPAM, an
+                                                    # extra OVN LB brings no benefit in non-primary
+                                                    # mode. Enable only if OVN-attached workloads
+                                                    # need OVN's native LB.
+# kube_ovn_enable_np: true                         # NetworkPolicy via OVN ACL
+# kube_ovn_enable_nat_gw: true                     # NAT gateway for VPC egress
+
+
+###################
+# Networking - CoreDNS
+###################
+
+enable_coredns: true
+
+# coredns_chart_version: "v1.45.2"                # Helm chart version
+# coredns_hpa_min_replicas: 1
+# coredns_hpa_max_replicas: 3
+
+
+###################
+# Networking - ExternalDNS (Cloudflare)
+###################
+
+# Automatically syncs Kubernetes Services / Ingresses / Gateways that carry
+# an external-dns annotation into an external DNS provider (this role only
+# supports Cloudflare). Example:
+#   Service metadata.annotations:
+#     external-dns.alpha.kubernetes.io/hostname: grafana.noty.cc
+#   → Cloudflare gets an A record  grafana.noty.cc → <LB IP>  written for you
+# Requires: credential_cloudflare_api_token in passwords.yaml. When empty the
+# secrets tool disables enable_external_dns automatically to avoid CrashLoops.
+# Default off: most internal clusters have no public zone to manage.
+
+enable_external_dns: false
+
+# external_dns_chart_version: "v1.20.0"          # Helm chart version
+# external_dns_domain: "noty.cc"                   # DNS zone to manage (or "disabled" to skip)
+# external_dns_acme_server: "staging"              # staging | production (cert-manager ACME endpoint)
+
+
+###################
+# Security - cert-manager
+###################
+
+enable_cert_manager: true
+
+# cert_manager_chart_version: "v1.20.2"          # Helm chart version
+# cert_manager_cli_version: "v2.4.1"              # cmctl CLI binary
+
+
+###################
+# Storage - Longhorn
+###################
+
+enable_longhorn: true
+
+# longhorn_chart_version: "v1.11.1"              # Helm chart version
+# longhorn_cli_version: "v1.11.1"                # longhornctl CLI binary
+# longhorn_replica_count: 2                        # volume replicas
+# longhorn_backup_enabled: true
+# longhorn_backup_target: "cifs://nas.noty.cc/backup"
+# longhorn_data_locality: "best-effort"            # best-effort | strict-local | disabled
+
+# --- Restrict Longhorn replicas to specific nodes (optional) ---
+# By default every Longhorn node is a replica candidate. If you want only
+# certain nodes to hold data (e.g. only those with large disks):
+#   1. Tag those nodes in Longhorn (the tag name is arbitrary):
+#        longhornctl update node <node1> --tags data
+#        longhornctl update node <node2> --tags data
+#      (use the Longhorn UI if longhornctl is not installed)
+#   2. Tell the default StorageClass to only pick replicas from tagged nodes:
+#
+# longhorn_replica_node_tag: "data"                # empty = every node is eligible
+
+
+###################
+# Storage - Ceph CSI (external Ceph cluster connection)
+###################
+
+enable_ceph_csi: false
+
+# ceph_csi_chart_version: "1.0.4"                 # Helm chart version
+
+# Connect to an EXTERNAL Ceph cluster (not deploy one).
+# Requires: cephx admin key in passwords.yaml as credential_ceph_admin_key
+#
+# ceph_csi_monitors:                                # Ceph monitor addresses
+#   - "10.0.0.1:6789"
+#   - "10.0.0.2:6789"
+#   - "10.0.0.3:6789"
+# ceph_csi_client_user: "admin"                     # cephx client user name
+# ceph_csi_rbd_pool: "rbd-pool"                     # RBD pool name
+# ceph_csi_cephfs_fsname: "cephfs"                 # CephFS filesystem (empty = disabled)
+# ceph_csi_cephfs_enabled: false                   # enable CephFS driver
+
+
+###################
+# Observability - metrics-server
+###################
+
+enable_metrics_server: true
+
+# metrics_server_chart_version: "v3.13.0"        # Helm chart version
+# metrics_server_tls_type: "cert-manager"          # cert-manager | helm | metrics-server
+
+
+###################
+# Observability - VictoriaLogs
+###################
+# Full guide (default behaviour, storage presets, HA, troubleshooting):
+#   docs/VICTORIA-METRICS.md
+
+enable_victoria_logs: true
+
+# victoria_logs_chart_version: "v0.12.0"         # Helm chart version
+# victoria_logs_retention: "7d"
+
+# --- Storage ---
+# storage_class defaults to cluster_storage_class (longhorn if enable_longhorn,
+# else local-path). Override only when using a different backend (e.g. Ceph):
+#
+# victoria_logs_storage_class: "longhorn"          # longhorn | ceph-rbd | local-path | ...
+# victoria_logs_storage_size: "5Gi"
+
+# --- Node affinity (recommended for production) ---
+# VictoriaLogs is a system service whose footprint grows over time (memory
+# scales with log volume, disk with retention). In production it is strongly
+# advised to pin it to a few dedicated nodes so it cannot starve business
+# workloads. Steps:
+#   1. Pick 2-3 nodes for the observability stack and label them (key/value
+#      are arbitrary):
+#        kubectl label node <node1> <node2> role=observability
+#   2. Uncomment below:
+#
+# victoria_logs_node_selector:
+#   role: observability                            # must match the label above
+#
+# Leaving this unset places no scheduling constraint — the vlsingle Pod may
+# land on any available node.
+
+
+###################
+# Observability - VictoriaMetrics + Grafana + AlertManager
+###################
+# Full guide (default behaviour, storage presets, HA, troubleshooting):
+#   docs/VICTORIA-METRICS.md
+
+enable_victoria_metrics: true
+# notice: in here, VM not means VitualMachines, it means VictoriaMetrics.
+
+# victoria_metrics_chart_version: "v0.74.1"      # Helm chart version (victoria-metrics-k8s-stack)
+# victoria_metrics_prometheus_chart_version: "v28.0.1"  # prometheus-operator-crds subchart
+# victoria_metrics_retention: "72h"
+# victoria_metrics_cluster_enabled: false          # true = application-layer HA (vmcluster); false = single vmsingle
+
+# --- Storage ---
+# storage_class defaults to cluster_storage_class (longhorn if enable_longhorn,
+# else local-path). Override only when using a different backend (e.g. Ceph):
+#
+# victoria_metrics_storage_class: "longhorn"       # longhorn | ceph-rbd | local-path | ...
+# victoria_metrics_storage_size: "50Gi"            # for vmsingle / vmstorage
+# victoria_metrics_aux_storage_size: "5Gi"         # for grafana / alertmanager / vmagent
+
+# --- Node affinity (recommended for production) ---
+# VictoriaMetrics is a system service whose footprint grows over time
+# (vmsingle memory 1-8+ GiB, disk 50+ GiB, scaling with series count).
+# In production it is strongly advised to pin every VM component (vmsingle/
+# vmstorage/vmselect/vminsert/grafana/alertmanager/vmagent/vmalert) to a
+# few dedicated nodes so it cannot starve business workloads. Steps:
+#   1. Pick 2-3 nodes for the observability stack and label them:
+#        kubectl label node <node1> <node2> role=observability
+#   2. Uncomment below:
+#
+# victoria_metrics_node_selector:
+#   role: observability                            # must match the label above
+#
+# Leaving this unset places no scheduling constraint — VM components may
+# land on any available node.
+
+
+###################
+# Application management - ArgoCD
+###################
+
+enable_argo_cd: false
+
+# argo_cd_chart_version: "v9.5.2"                 # Helm chart version
+# argo_cd_cli_version: "v3.3.7"                   # argocd CLI binary
+# argo_cd_admin_enabled: false                     # built-in admin user
+
+
+###################
+# Application management - Kured
+###################
+
+enable_kured: false
+
+# kured_chart_version: "v5.11.0"                 # Helm chart version
+# kured_reboot_start: "04:00"
+# kured_reboot_end: "08:00"
+# kured_reboot_zone: "UTC"
+# kured_slack_enabled: true
+
+
+###################
+# Virtualization - KubeVirt
+###################
+
+enable_kubevirt: false
+
+# kubevirt_version: "v1.8.4"                     # KubeVirt operator + virtctl CLI
+# kubevirt_use_emulation: false                    # software emu (no /dev/kvm)
+# kubevirt_feature_gates:                          # list of feature gates to enable
+#   - ExpandDisks                                  #   online disk resize
+#   - NetworkBindingPlugins                         #   managedTap + custom bindings (needed for Multus multi-CNI)
+#   - HotplugVolumes                                #   hot-add/remove volumes without restarting VM
+#   - CPUManager                                    #   integrate with kubelet CPU manager for vCPU pinning
+# kubevirt_managedtap_enabled: true                 # managedTap binding plugin (requires NetworkBindingPlugins)
+# kubevirt_managedtap_domain_attachment_type: "managedTap"  # only supported value
+# kubevirt_default_network_interface: "masquerade" # masquerade | bridge | slirp
+# kubevirt_permitted_pci_host_devices:              # PCI device passthrough (e.g. GPU direct to VM)
+#   - pci_vendor_selector: "10de:1aef"              #   PCI vendor:device ID (lspci -nn)
+#     resource_name: "nvidia.com/GA102_GEFORCE_RTX_3090"  # cluster-unique resource name
+#     external_resource_provider: true              #   true = device provided by gpu-operator
+# kubevirt_permitted_mediated_devices: []           # vGPU/MDEV passthrough (rare)
+
+
+###################
+# GPU - NVIDIA GPU Operator
+###################
+
+enable_gpu_operator: false
+
+# gpu_operator_chart_version: "v26.3.3"          # Helm chart version
+
+# GPU Operator manages NVIDIA driver, toolkit, device plugin, and DCGM exporter.
+# Requires NVIDIA GPU hardware on at least one node.
+#
+# gpu_operator_nfd_enabled: true                    # Node Feature Discovery (auto-detect GPU)
+# gpu_operator_cdi_enabled: true                    # Container Device Interface (KubeVirt passthrough)
+# gpu_operator_driver_enabled: true                 # install driver via container (false = host driver)
+# gpu_operator_sandbox_workloads_enabled: true      # Expose GPU to sandboxed runtimes (KubeVirt VMs).
+                                                    # Global "gate" — registers GPU as sandbox device.
+                                                    # Does NOT change GPU behaviour by itself; actual
+                                                    # VM passthrough activation requires per-node label:
+                                                    #   nvidia.com/gpu.workload.config=vm-passthrough
+                                                    # (gpu-operator skips host driver on these nodes).
+                                                    # Plus `kubevirt_permitted_pci_host_devices` +
+                                                    # VM spec `devices.gpus` request.
+                                                    # Default true: project is KubeVirt-first.
+                                                    # Set false if you only use GPU for Pods.
+# gpu_operator_sandbox_workloads_mode: "kubevirt"   # kubevirt | kata (only when sandbox=true)
+# gpu_operator_mig_enabled: false                  # Multi-Instance GPU
+# gpu_operator_mig_strategy: "single"              # single | mixed
+# gpu_operator_time_slicing_enabled: false          # GPU time-slicing
+# gpu_operator_time_slicing_replicas: 1            # pods per GPU
+# gpu_operator_dcgm_exporter_enabled: true          # GPU metrics for VictoriaMetrics
+
+
+###################
+# Cluster services (base OS features)
+###################
+
+# cluster_postfix_enabled: false                   # iCloud SMTP email relay (false = disabled)
+# cluster_unattended_upgrades_enabled: false        # auto security updates (false = disabled)
+# cluster_device_enabled: false                    # USB storage TRIM hack (Pi + USB SSD; false on x86)
+
+
+###################
+# Kubelet advanced tuning (CPU/memory/topology manager)
+###################
+
+# kubelet-arg is built from three parts (see group_vars/all/main.yaml):
+#   common_args + preset(pod|kubevirt) + override
+# Override is two-level: group_vars/<group>.yaml (all nodes in group)
+# + host_vars/<node>.yaml (single node, ADDED not replaced).
+# All entries are raw strings rendered verbatim — no validation.
+#
+# A precheck runs automatically before kubelet config is applied
+# (roles/k3s/tasks/precheck.yaml). It detects when cpu-manager-policy is
+# changing (static ↔ none) and fails if running KubeVirt VMs are found on
+# the node — kubelet restart would kill them. API queries are delegated
+# to a server node (which has kubeconfig). Skipped on first deploy and
+# when KubeVirt is disabled.
+
+# --- Pod workers (group_vars/pod.yaml) ---
+# Default: empty — kubelet uses built-in defaults (no CPU/memory pinning).
+# Pod workers don't need static CPU unless running latency-sensitive
+# workloads (databases, ML inference). Add args here if needed:
+#
+# pod_kubelet_override: []
+
+# --- KubeVirt workers (group_vars/kubevirt.yaml) ---
+# Preset already enables static CPU + restricted topology. Add per-group
+# args here (applies to all kubevirt nodes):
+#
+# kubevirt_kubelet_override:
+#   - cpu-manager-policy=static
+#   - topology-manager-policy=restricted
+#   - reserved-cpus=4
+#   - feature-gates=CPUManagerPolicyAlphaOptions=true
+#   - cpu-manager-policy-options=distribute-cpus-across-numa=true
+#   # - memory-manager-policy=Static
+#   # - system-reserved=memory=4Gi
+#   # - kube-reserved=memory=4Gi
+#   # - reserved-memory=0:memory=1Gi;1:memory=1Gi;2:memory=1Gi;3:memory=1Gi;4:memory=1Gi;5:memory=1Gi;6:memory=1Gi;7:memory=1Gi
+
+
+# --- Per-host (host_vars/<node>.yaml) ---
+# ADDED to the group-level override above (not replaces).
+# Use for hardware-specific settings like reserved_cpus:
+#
+# kubevirt_kubelet_override_host:
+#   - reserved-cpus=0,1
+
+
+###################
+# Pod resource tiers (kolla-style global resource profiles)
+###################
+
+# All roles reference these tiers instead of hardcoding resource limits.
+# Sized for bare-metal servers (96-core / 512GB+ class).
+# Override a tier to scale the entire cluster at once.
+#
+# cluster_pod_resources:
+#   small:                                    # sidecars, operators, controllers, multus
+#     limits: {cpu: 1, memory: 512Mi}
+#     requests: {cpu: 100m, memory: 256Mi}
+#   medium:                                   # agents (cilium, grafana, vlogs, vmagent)
+#     limits: {cpu: 2, memory: 2Gi}
+#     requests: {cpu: 500m, memory: 1Gi}
+#   large:                                    # storage backends (vmsingle, vmstorage, vmcluster)
+#     limits: {cpu: 4, memory: 8Gi}
+#     requests: {cpu: 1, memory: 4Gi}

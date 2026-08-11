@@ -17,37 +17,15 @@
         - name: Set encrypted variables fact
           ansible.builtin.set_fact:
             encrypted_variables:
-              ansible_password: '{{ ansible_password }}'
-              global_map:
-                credentials:
-                  argocd:
-                    server:
-                      admin:
-                        password: '{{ global_map.credentials.argocd.server.admin.password }}'
-                      user:
-                        password: '{{ global_map.credentials.argocd.server.user.password }}'
-                  cluster:
-                    postfix:
-                      user:
-                        alias: '{{ global_map.credentials.cluster.postfix.user.alias }}'
-                        name: '{{ global_map.credentials.cluster.postfix.user.name }}'
-                        password: '{{ global_map.credentials.cluster.postfix.user.password }}'
-                  externaldns:
-                    cloudflare:
-                      api:
-                        token: '{{ global_map.credentials.externaldns.cloudflare.api.token }}'
-                  kured:
-                    slack:
-                      notify:
-                        url: '{{ global_map.credentials.kured.slack.notify.url }}'
-                  longhorn:
-                    backup:
-                      user:
-                        password: '{{ global_map.credentials.longhorn.backup.user.password }}'
-                  victoriametrics:
-                    grafana:
-                      user:
-                        password: '{{ global_map.credentials.victoriametrics.grafana.user.password }}'
+              password_argocd_admin: '{{ password_argocd_admin }}'
+              password_argocd_user: '{{ password_argocd_user }}'
+              password_grafana_admin: '{{ password_grafana_admin }}'
+              credential_cloudflare_api_token: '{{ credential_cloudflare_api_token }}'
+              credential_postfix_alias: '{{ credential_postfix_alias }}'
+              credential_postfix_name: '{{ credential_postfix_name }}'
+              credential_postfix_password: '{{ credential_postfix_password }}'
+              credential_slack_webhook_url: '{{ credential_slack_webhook_url }}'
+              credential_longhorn_backup_password: '{{ credential_longhorn_backup_password }}'
           no_log: true
 
         - name: List encrypted variables
@@ -111,26 +89,24 @@
               ansible-vault encrypt_string {{ item.value | quote }}
                 -n {{ item.key | quote }} --vault-pass-file {{ vault_file.path }}
           loop:
-            - key: ansible_password
-              value: '{{ ansible_password }}'
-            - key: global_map.credentials.argocd.server.admin.password
-              value: '{{ global_map.credentials.argocd.server.admin.password }}'
-            - key: global_map.credentials.argocd.server.user.password
-              value: '{{ global_map.credentials.argocd.server.user.password }}'
-            - key: global_map.credentials.cluster.postfix.user.alias
-              value: '{{ global_map.credentials.cluster.postfix.user.alias }}'
-            - key: global_map.credentials.cluster.postfix.user.name
-              value: '{{ global_map.credentials.cluster.postfix.user.name }}'
-            - key: global_map.credentials.cluster.postfix.user.password
-              value: '{{ global_map.credentials.cluster.postfix.user.password }}'
-            - key: global_map.credentials.externaldns.cloudflare.api.token
-              value: '{{ global_map.credentials.externaldns.cloudflare.api.token }}'
-            - key: global_map.credentials.kured.slack.notify.url
-              value: '{{ global_map.credentials.kured.slack.notify.url }}'
-            - key: global_map.credentials.longhorn.backup.user.password
-              value: '{{ global_map.credentials.longhorn.backup.user.password }}'
-            - key: global_map.credentials.victoriametrics.grafana.user.password
-              value: '{{ global_map.credentials.victoriametrics.grafana.user.password }}'
+            - key: password_argocd_admin
+              value: '{{ password_argocd_admin }}'
+            - key: password_argocd_user
+              value: '{{ password_argocd_user }}'
+            - key: password_grafana_admin
+              value: '{{ password_grafana_admin }}'
+            - key: credential_cloudflare_api_token
+              value: '{{ credential_cloudflare_api_token }}'
+            - key: credential_postfix_alias
+              value: '{{ credential_postfix_alias }}'
+            - key: credential_postfix_name
+              value: '{{ credential_postfix_name }}'
+            - key: credential_postfix_password
+              value: '{{ credential_postfix_password }}'
+            - key: credential_slack_webhook_url
+              value: '{{ credential_slack_webhook_url }}'
+            - key: credential_longhorn_backup_password
+              value: '{{ credential_longhorn_backup_password }}'
           register: encrypted_variables
           changed_when: false
           no_log: true

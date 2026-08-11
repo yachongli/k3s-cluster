@@ -1,0 +1,35 @@
+server:
+  hosts:
+    apollo:
+    boreas:
+    cerus:
+
+# -- Pure Pod worker nodes.
+# Place a node here when it will NEVER run KubeVirt VMs. Kubelet keeps
+# default (non-pinning) policy so Pod scheduling is unrestricted.
+pod:
+  hosts:
+    chaos:
+    crios:
+    hypnos:
+
+# -- KubeVirt worker nodes.
+# Place a node here when it may run KubeVirt VMs. group_vars/kubevirt.yaml
+# enables kubevirt-optimized kubelet (CPU pinning + NUMA affinity).
+# A node here is still a normal worker — Pods can also schedule here.
+kubevirt:
+  hosts:
+    helios:
+    hermes:
+
+# Parent group — k3s role uses `groups.agent` for HA detection, so all
+# worker nodes (pod + kubevirt) MUST be reachable via this group.
+agent:
+  children:
+    pod:
+    kubevirt:
+
+cluster:
+  children:
+    server:
+    agent:
