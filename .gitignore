@@ -11,6 +11,13 @@ inventory/cluster/group_vars/all/globals.yaml
 # Claude
 .claude/
 
+# Python
+__pycache__/
+*.py[cod]
+
+# IDE
+.idea/
+
 # MacOS
 **/.DS_Store
 .AppleDouble
