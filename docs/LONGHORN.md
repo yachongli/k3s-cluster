@@ -69,88 +69,38 @@ Longhorn 部署后在 `kube-system` 和 `longhorn-system` 两个 namespace 中�
 
 ### 3.1 创建 PVC 全流程
 
-```
-用户创建 PVC (StorageClass=longhorn, size=50Gi)
-│
-▼
-┌─────────────────────────────────────────────────────────────────┐
-│ 1. K8s 调度器决定 Pod → k8s-test-2                              │
-│    kubelet 发现 Pod 需要 PVC                                     │
-└───────────────────────────┬─────────────────────────────────────┘
-                            │
-                            ▼
-┌─────────────────────────────────────────────────────────────────┐
-│ 2. CSI Provisioner → longhorn-csi-plugin                        │
-│    "创建一个 50Gi 的卷，2 副本"                                   │
-└───────────────────────────┬─────────────────────────────────────┘
-                            │
-                            ▼
-┌─────────────────────────────────────────────────────────────────┐
-│ 3. longhorn-manager 调度副本                                    │
-│                                                                  │
-│    筛选条件（按顺序）：                                           │
-│    ① 节点是否 cordon/drain？ → 排除                              │
-│    ② 节点是否有 longhorn 磁盘？ → 排除                           │
-│    ③ 磁盘空间是否足够？ → 排除                                    │
-│    ④ replica_node_tag 是否匹配？ → 排除（如果设了）               │
-│    ⑤ data_locality=best-effort → 优先放一个在 Pod 所在节点       │
-│    ⑥ replica_auto_balance=least-effort → 尽量均匀分布            │
-│                                                                  │
-│    结果：                                                         │
-│    ├── Replica-1 → k8s-test-2（Pod 同节点，best-effort）          │
-│    └── Replica-2 → k8s-test-1（另一节点，保证冗余）              │
-└───────────────────────────┬─────────────────────────────────────┘
-                            │
-                            ▼
-┌─────────────────────────────────────────────────────────────────┐
-│ 4. longhorn-manager 创建 Engine                                  │
-│    Engine 固定在 Pod 所在节点（k8s-test-2）                       │
-│    因为 iSCSI target 必须和 Pod 同节点（走本地回环）              │
-└───────────────────────────┬─────────────────────────────────────┘
-                            │
-                            ▼
-┌─────────────────────────────────────────────────────────────────┐
-│ 5. CSI Attacher 挂载卷                                           │
-│    iSCSI initiator (内核) → iSCSI target (Engine, 本地)           │
-│    → /dev/disk/by-path/... → 挂载到 Pod 容器                     │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    PVC["用户创建 PVC<br/>StorageClass=longhorn, size=50Gi"]
+    S1["1. K8s 调度器决定 Pod → k8s-test-2<br/>kubelet 发现 Pod 需要 PVC"]
+    S2["2. CSI Provisioner → longhorn-csi-plugin<br/>创建一个 50Gi 的卷，2 副本"]
+    S3["3. longhorn-manager 调度副本"]
+    S3F["筛选条件（按顺序）：<br/>① 节点是否 cordon/drain？<br/>② 节点是否有 longhorn 磁盘？<br/>③ 磁盘空间是否足够？<br/>④ replica_node_tag 是否匹配？<br/>⑤ data_locality=best-effort<br/>⑥ replica_auto_balance=least-effort"]
+    S3R["结果：<br/>Replica-1 → k8s-test-2（Pod 同节点）<br/>Replica-2 → k8s-test-1（另一节点）"]
+    S4["4. longhorn-manager 创建 Engine<br/>Engine 固定在 Pod 所在节点（k8s-test-2）<br/>iSCSI target 必须和 Pod 同节点（本地回环）"]
+    S5["5. CSI Attacher 挂载卷<br/>iSCSI initiator → iSCSI target (Engine)<br/>→ /dev/disk/by-path/... → Pod 容器"]
+
+    PVC --> S1 --> S2 --> S3
+    S3 --> S3F --> S3R --> S4 --> S5
 ```
 
 ### 3.2 写入数据路径
 
-```
-Pod 写入数据 "把 4KB 写到 offset 0x1000"
-│
-▼
-iSCSI initiator (内核, 本地回环)
-│
-▼
-┌──────────────────────────────────────────────┐
-│ Engine (k8s-test-2, Pod 同节点)              │
-│  接收 iSCSI 写请求                            │
-└──────────┬───────────────────┬───────────────┘
-           │                   │
-           │  TCP (端口 9500+) │  TCP (端口 9500+)
-           │  块级写入指令       │  块级写入指令
-           │  [offset + data]   │  [offset + data]
-           ▼                   ▼
-┌──────────────────────┐   ┌──────────────────────┐
-│ Replica-1            │   │ Replica-2            │
-│ (k8s-test-2, 本地)   │   │ (k8s-test-1, 远端)   │
-│                      │   │                      │
-│ pwrite(              │   │ pwrite(              │
-│   volume-head.img,   │   │   volume-head.img,   │
-│   offset=0x1000,     │   │   offset=0x1000,     │
-│   data=...           │   │   data=...           │
-│ )                    │   │ )                    │
-└──────────┬───────────┘   └──────────┬───────────┘
-           │                          │
-           └──────────┬───────────────┘
-                      │
-                      ▼  确认写完成
-┌──────────────────────────────────────────────┐
-│ Engine 等所有 Replica 确认 → 回复 Pod "写完成" │
-└──────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    Pod["Pod 写入数据<br/>把 4KB 写到 offset 0x1000"]
+    ISI["iSCSI initiator<br/>内核, 本地回环"]
+    ENG["Engine (k8s-test-2, Pod 同节点)<br/>接收 iSCSI 写请求"]
+
+    R1["Replica-1 (k8s-test-2, 本地)<br/>pwrite(volume-head.img,<br/>offset=0x1000, data=...)"]
+    R2["Replica-2 (k8s-test-1, 远端)<br/>TCP [offset + data]<br/>pwrite(volume-head.img,<br/>offset=0x1000, data=...)"]
+    ACK["Engine 等所有 Replica 确认<br/>→ 回复 Pod '写完成'"]
+
+    Pod --> ISI --> ENG
+    ENG -- "TCP (端口 9500+)<br/>块级写入指令" --> R1
+    ENG -- "TCP (端口 9500+)<br/>块级写入指令" --> R2
+    R1 --> ACK
+    R2 --> ACK
 ```
 
 **关键点：**
@@ -161,18 +111,17 @@ iSCSI initiator (内核, 本地回环)
 
 ### 3.3 读取数据路径
 
-```
-Pod 读取数据 "读 offset 0x1000, 4KB"
-│
-▼
-iSCSI initiator (内核, 本地回环)
-│
-▼
-Engine (k8s-test-2)
-│
-├──→ 优先从同节点 Replica-1 (k8s-test-2) 读  ← 本地, 无网络开销
-│
-└──→ (如果 Replica-1 不可用) 从 Replica-2 (k8s-test-1) 读  ← 跨网络
+```mermaid
+flowchart LR
+    Pod["Pod 读取数据<br/>读 offset 0x1000, 4KB"]
+    ISI["iSCSI initiator<br/>内核, 本地回环"]
+    ENG["Engine (k8s-test-2)"]
+    R1["Replica-1 (k8s-test-2, 本地)<br/>✅ 优先读, 无网络开销"]
+    R2["Replica-2 (k8s-test-1, 远端)<br/>⚠️ 仅 Replica-1 不可用时<br/>跨网络读"]
+
+    Pod --> ISI --> ENG
+    ENG -- "优先" --> R1
+    ENG -. "fallback" .-> R2
 ```
 
 读默认走同节点的 Replica，不产生跨网络流量。
@@ -209,19 +158,28 @@ $ du -sh volume-head-002.img
 
 ### 5.1 Copy-on-Write 链
 
-```
-创建快照时：
-  volume-head-002.img  →  冻结为 volume-snap-002.img（只读）
-                          新建 volume-head-003.img（空, 可写）
+```mermaid
+flowchart TD
+    subgraph "创建快照时"
+        OLD["volume-head-002.img<br/>当前活跃写入层"]
+        SNAP["volume-snap-002.img<br/>冻结为只读"]
+        NEW["volume-head-003.img<br/>新建空, 可写"]
+        OLD -->|冻结| SNAP
+        OLD2[" "] -.->|新建| NEW
+    end
 
-读 offset=0x1000：
-  1. 查 head-003 → 有？→ 返回
-  2. 查 snap-002 → 有？→ 返回
-  3. 查 snap-001 → 有？→ 返回
-  4. 都没有 → 返回零块（未写过）
+    subgraph "读 offset=0x1000（回溯链）"
+        RH["1. 查 head-003"] -->|有?| RET1["返回数据"]
+        RH -->|没有| RS2["2. 查 snap-002"]
+        RS2 -->|有?| RET2["返回数据"]
+        RS2 -->|没有| RS1["3. 查 snap-001"]
+        RS1 -->|有?| RET3["返回数据"]
+        RS1 -->|没有| ZERO["4. 返回零块（未写过）"]
+    end
 
-写 offset=0x1000：
-  → 直接写 head-003（snap 永远不可变）
+    subgraph "写 offset=0x1000"
+        WH["直接写 head-003<br/>snap 永远不可变"]
+    end
 ```
 
 ### 5.2 快照的作用
@@ -235,18 +193,15 @@ $ du -sh volume-head-002.img
 
 ### 5.3 备份流程
 
-```
-触发备份（手动或定时任务）
-│
-▼
-1. 当前 head 冻结为 snap（只读一致性点）
-2. 新建空 head（Pod 继续写入，不受影响）
-3. 从 snap 读取数据，增量传输到备份目标（CIFS）
-   只传上次备份后变化的块
-│
-▼
-4. 备份完成，snap 标记为已备份
-   autoCleanupSystemGeneratedSnapshot=true → 自动清理
+```mermaid
+flowchart TD
+    TRIG["触发备份<br/>手动或定时任务"]
+    S1["1. 当前 head 冻结为 snap<br/>只读一致性点"]
+    S2["2. 新建空 head<br/>Pod 继续写入, 不受影响"]
+    S3["3. 从 snap 读取数据<br/>增量传输到备份目标 (CIFS)<br/>只传上次备份后变化的块"]
+    S4["4. 备份完成<br/>snap 标记为已备份<br/>autoCleanup → 自动清理"]
+
+    TRIG --> S1 --> S2 --> S3 --> S4
 ```
 
 ---
@@ -285,87 +240,79 @@ $ du -sh volume-head-002.img
 
 ### 7.2 数据布局（2 节点集群示例）
 
-```
-假设 Pod 被调度到 k8s-test-2：
+```mermaid
+flowchart LR
+    subgraph "k8s-test-2 (Pod 所在节点)"
+        ENG1["Engine<br/>vmsingle"]
+        ENG2["Engine<br/>grafana"]
+        R1A["Replica-1 (本地)<br/>pvc-1af59d16"]
+        R2A["Replica-1 (本地)<br/>pvc-4718b8e2"]
+        ENG1 --> R1A
+        ENG2 --> R2A
+    end
 
-vmsingle (50Gi)                     grafana (5Gi)
-├── Engine: k8s-test-2              ├── Engine: k8s-test-2
-├── Replica-1: k8s-test-2 (本地)    ├── Replica-1: k8s-test-2 (本地)
-└── Replica-2: k8s-test-1 (远端)    └── Replica-2: k8s-test-1 (远端)
-     /var/lib/longhorn/                  /var/lib/longhorn/
-     replicas/pvc-1af59d16-.../          replicas/pvc-4718b8e2-.../
-     volume-head-002.img (稀疏)          volume-head-002.img (稀疏)
-     实际占用 ~3-29G                      实际占用 <1G
+    subgraph "k8s-test-1"
+        R1B["Replica-2 (远端)<br/>pvc-1af59d16<br/>50Gi 稀疏, 实占 ~3-29G"]
+        R2B["Replica-2 (远端)<br/>pvc-4718b8e2<br/>5Gi 稀疏, 实占 <1G"]
+        ENG1 -. "TCP 复制" .-> R1B
+        ENG2 -. "TCP 复制" .-> R2B
+    end
 ```
+
+每个 Engine 固定在 Pod 所在节点，2 个 Replica 分布在两个节点上保证数据冗余。
 
 ### 7.3 写入路径（VictoriaMetrics 视角）
 
-```
-kubelet /metrics → vmagent 抓取
-│
-▼
-vmagent → vmagent 缓冲 (emptyDir, 不走 Longhorn)
-│
-▼
-vmsingle (k8s-test-2) 写入 TSDB 数据
-│
-▼
-vmsingle 的 PVC → /dev/disk/by-path/... (iSCSI 块设备)
-│
-▼
-Engine (k8s-test-2) 同步到 2 个 Replica:
-├── Replica-1 (k8s-test-2): pwrite → /var/lib/longhorn/.../volume-head.img
-└── Replica-2 (k8s-test-1): TCP [offset+data] → pwrite → /var/lib/longhorn/.../volume-head.img
+```mermaid
+flowchart TD
+    KUBE["kubelet /metrics"]
+    AGENT["vmagent 抓取<br/>缓冲到 emptyDir (不走 Longhorn)"]
+    SINGLE["vmsingle (k8s-test-2)<br/>写入 TSDB 数据"]
+    PVC["vmsingle PVC<br/>/dev/disk/by-path/... (iSCSI 块设备)"]
+    ENG["Engine (k8s-test-2)<br/>同步到 2 个 Replica"]
+    R1["Replica-1 (k8s-test-2, 本地)<br/>pwrite → /var/lib/longhorn/.../volume-head.img"]
+    R2["Replica-2 (k8s-test-1, 远端)<br/>TCP [offset+data] → pwrite → /var/lib/longhorn/.../volume-head.img"]
+
+    KUBE --> AGENT --> SINGLE --> PVC --> ENG
+    ENG --> R1
+    ENG --> R2
 ```
 
 ### 7.4 故障场景
 
 **场景 1：k8s-test-1 磁盘故障**
 
-```
-Replica-2 (k8s-test-1) 丢失
-│
-▼
-Longhorn 检测到副本数 < 期望值
-│
-▼
-在 k8s-test-2 上重建副本（如果空间足够）
-或等待 k8s-test-1 恢复后增量同步
-│
-▼
-vmsingle 继续运行（Engine 和 Replica-1 都在 k8s-test-2）
-数据不丢，服务不中断
+```mermaid
+flowchart TD
+    R2["Replica-2 (k8s-test-1) 丢失"]
+    DET["Longhorn 检测到副本数 < 期望值"]
+    RB["在 k8s-test-2 上重建副本<br/>或等待 k8s-test-1 恢复后增量同步"]
+    OK["vmsingle 继续运行<br/>Engine 和 Replica-1 都在 k8s-test-2<br/>数据不丢, 服务不中断"]
+
+    R2 --> DET --> RB --> OK
 ```
 
 **场景 2：k8s-test-2 宕机（Pod 所在节点）**
 
-```
-vmsingle Pod 挂掉
-Engine 挂掉
-Replica-1 (k8s-test-2) 不可用
-│
-▼
-K8s 在 k8s-test-1 上重新调度 vmsingle Pod
-│
-▼
-Longhorn 在 k8s-test-1 创建新 Engine
-新 Engine 从 Replica-2 (k8s-test-1, 本地) 读取数据
-│
-▼
-Pod 恢复，数据从 Replica-2 提供
-（数据完整，因为 Replica-2 有全部数据）
+```mermaid
+flowchart TD
+    DOWN["vmsingle Pod 挂掉<br/>Engine 挂掉<br/>Replica-1 (k8s-test-2) 不可用"]
+    SCHED["K8s 在 k8s-test-1 上重新调度 vmsingle Pod"]
+    NEWENG["Longhorn 在 k8s-test-1 创建新 Engine<br/>从 Replica-2 (k8s-test-1, 本地) 读取数据"]
+    RECOVER["Pod 恢复<br/>数据从 Replica-2 提供<br/>数据完整"]
+
+    DOWN --> SCHED --> NEWENG --> RECOVER
 ```
 
 **场景 3：全部节点宕机**
 
-```
-所有 Replica 丢失
-│
-▼
-从备份目标 (CIFS) 恢复
-│
-▼
-创建新卷 → 从备份恢复数据 → Pod 挂载
+```mermaid
+flowchart TD
+    ALL["所有 Replica 丢失"]
+    BACKUP["从备份目标 (CIFS) 恢复"]
+    NEWVOL["创建新卷 → 从备份恢复数据 → Pod 挂载"]
+
+    ALL --> BACKUP --> NEWVOL
 ```
 
 ---
