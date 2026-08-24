@@ -88,17 +88,6 @@ cluster_api_host: "192.168.4.10"                   # REQUIRED: LB / K3s API VIP 
 # cluster_service_monitor_enabled: true            # auto: enable_victoria_metrics
 # cluster_ingress_class: "cilium"                  # auto: cilium if enable_cilium else traefik
 
-# --- Namespace separation ---
-# Major components deploy to their own namespace by default. Override
-# here to change the namespace name (e.g. merge two components into one
-# namespace, or move back to kube-system for compatibility).
-#
-# cilium_namespace: "cilium-system"
-# kube_ovn_namespace: "kube-ovn-system"
-# longhorn_namespace: "longhorn-system"
-# victoria_metrics_namespace: "monitoring"           # VictoriaMetrics + VictoriaLogs + Grafana
-# victoria_logs_namespace: "monitoring"              # defaults to victoria_metrics_namespace
-
 
 ###################
 # Networking - Cilium (CNI)
@@ -106,6 +95,7 @@ cluster_api_host: "192.168.4.10"                   # REQUIRED: LB / K3s API VIP 
 
 enable_cilium: true
 
+# cilium_namespace: "cilium-system"                # namespace (default: cilium-system)
 # cilium_chart_version: "v1.19.3"                 # Helm chart version
 # cilium_cli_version: "v0.19.2"                   # cilium CLI binary
 # cilium_gateway_api_version: "v1.5.1"            # Gateway API CRDs
@@ -164,6 +154,7 @@ enable_multus: false
 
 enable_kube_ovn: false
 
+# kube_ovn_namespace: "kube-ovn-system"            # namespace (default: kube-ovn-system)
 # kube_ovn_chart_version: "v1.16.2"               # Helm chart version (stable)
 # Kube-OVN runs as non-primary CNI when Cilium is enabled (default).
 # When Cilium is disabled, Kube-OVN becomes the primary CNI automatically.
@@ -236,6 +227,7 @@ enable_cert_manager: true
 
 enable_longhorn: true
 
+# longhorn_namespace: "longhorn-system"            # namespace (default: longhorn-system)
 # longhorn_chart_version: "v1.11.1"              # Helm chart version
 # longhorn_cli_version: "v1.11.1"                # longhornctl CLI binary
 # longhorn_replica_count: 2                        # volume replicas
@@ -294,6 +286,7 @@ enable_metrics_server: true
 
 enable_victoria_logs: true
 
+# victoria_logs_namespace: "monitoring"           # namespace (default: follows victoria_metrics_namespace)
 # victoria_logs_chart_version: "v0.12.0"         # Helm chart version
 # victoria_logs_retention: "7d"
 
@@ -330,6 +323,7 @@ enable_victoria_logs: true
 enable_victoria_metrics: true
 # notice: in here, VM not means VitualMachines, it means VictoriaMetrics.
 
+# victoria_metrics_namespace: "monitoring"       # namespace (default: monitoring)
 # victoria_metrics_chart_version: "v0.74.1"      # Helm chart version (victoria-metrics-k8s-stack)
 # victoria_metrics_prometheus_chart_version: "v28.0.1"  # prometheus-operator-crds subchart
 # victoria_metrics_retention: "72h"

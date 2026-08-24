@@ -88,16 +88,6 @@ cluster_api_host: "192.168.4.10"                   # 必填：LB / K3s API VIP�
 # cluster_service_monitor_enabled: true            # 自动值：等于 enable_victoria_metrics
 # cluster_ingress_class: "cilium"                  # 自动值：启用 cilium 时为 cilium，否则 traefik
 
-# --- Namespace 分离 ---
-# 主要组件默认部署到各自独立的 namespace。在此覆盖可修改 namespace 名称
-# （例如把两个组件合并到一个 namespace，或改回 kube-system 以保持兼容）。
-#
-# cilium_namespace: "cilium-system"
-# kube_ovn_namespace: "kube-ovn-system"
-# longhorn_namespace: "longhorn-system"
-# victoria_metrics_namespace: "monitoring"           # VictoriaMetrics + VictoriaLogs + Grafana
-# victoria_logs_namespace: "monitoring"              # 默认跟随 victoria_metrics_namespace
-
 
 ###################
 # 网络 - Cilium（CNI）
@@ -105,6 +95,7 @@ cluster_api_host: "192.168.4.10"                   # 必填：LB / K3s API VIP�
 
 enable_cilium: true
 
+# cilium_namespace: "cilium-system"                # namespace（默认：cilium-system）
 # cilium_chart_version: "v1.19.3"                 # Helm chart 版本
 # cilium_cli_version: "v0.19.2"                   # cilium CLI 二进制
 # cilium_gateway_api_version: "v1.5.1"            # Gateway API CRD
@@ -159,6 +150,7 @@ enable_multus: false
 
 enable_kube_ovn: false
 
+# kube_ovn_namespace: "kube-ovn-system"            # namespace（默认：kube-ovn-system）
 # kube_ovn_chart_version: "v1.16.2"               # Helm chart 版本（stable）
 # 当 Cilium 启用时（默认），Kube-OVN 以 non-primary CNI 运行。
 # 当 Cilium 被关闭时，Kube-OVN 会自动成为主 CNI。
@@ -230,6 +222,7 @@ enable_cert_manager: true
 
 enable_longhorn: true
 
+# longhorn_namespace: "longhorn-system"            # namespace（默认：longhorn-system）
 # longhorn_chart_version: "v1.11.1"              # Helm chart 版本
 # longhorn_cli_version: "v1.11.1"                # longhornctl CLI 二进制
 # longhorn_replica_count: 2                        # 卷副本数
@@ -287,6 +280,7 @@ enable_metrics_server: true
 
 enable_victoria_logs: true
 
+# victoria_logs_namespace: "monitoring"           # namespace（默认：跟随 victoria_metrics_namespace）
 # victoria_logs_chart_version: "v0.12.0"         # Helm chart 版本
 # victoria_logs_retention: "7d"
 
@@ -319,6 +313,7 @@ enable_victoria_logs: true
 enable_victoria_metrics: true
 # 注意，这里的VM不是虚拟机的缩写，而是 VictoriaMetrics 的简称。
 
+# victoria_metrics_namespace: "monitoring"       # namespace（默认：monitoring）
 # victoria_metrics_chart_version: "v0.74.1"      # Helm chart 版本（victoria-metrics-k8s-stack）
 # victoria_metrics_prometheus_chart_version: "v28.0.1"  # prometheus-operator-crds 子 chart
 # victoria_metrics_retention: "72h"
