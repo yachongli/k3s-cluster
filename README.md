@@ -377,6 +377,7 @@ cluster_pod_resources:
 
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — why the three layers, derived defaults, CNI coexistence
 - [docs/CONFIGURATION.md](docs/CONFIGURATION.md) — every override, common scenarios
+- [docs/GLOBALS.md](docs/GLOBALS.md) — globals.yaml deep dive: resolution order, component switches, version overrides, FAQ（中文）
 - [docs/OPENSTACK.md](docs/OPENSTACK.md) — OpenStack / spoofing-protected underlays
 - [docs/VICTORIA-METRICS.md](docs/VICTORIA-METRICS.md) — VictoriaMetrics / VictoriaLogs storage presets, pinning, HA
 - [docs/架构设计.md](docs/架构设计.md) — 设计说明（中文）

@@ -376,6 +376,7 @@ cluster_pod_resources:
 
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) —— 三层结构、派生默认值、CNI 共存机制（英文）
 - [docs/CONFIGURATION.md](docs/CONFIGURATION.md) —— 全部覆盖项与常见场景（英文）
+- [docs/GLOBALS.md](docs/GLOBALS.md) —— globals.yaml 覆盖机制：变量解析顺序、组件开关、版本覆盖、FAQ
 - [docs/OPENSTACK.md](docs/OPENSTACK.md) —— OpenStack / 端口安全底层
 - [docs/VICTORIA-METRICS.md](docs/VICTORIA-METRICS.md) —— VictoriaMetrics / VictoriaLogs 存储选项、节点固定、HA
 - [docs/架构设计.md](docs/架构设计.md) —— 设计说明（中文）
