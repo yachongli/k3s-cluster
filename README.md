@@ -8,6 +8,12 @@ and extended with multi-CNI (Multus + Kube-OVN), KubeVirt, NVIDIA GPU Operator,
 external Ceph CSI, plaintext-based secrets, and cloud-underlay support (OpenStack,
 proxy, registry mirror).
 
+> **Note:** This project is forked from
+> [axivo/k3s-cluster](https://github.com/axivo/k3s-cluster) and is developed
+> and maintained independently. Big thanks to the original author for the
+> excellent foundation — all credit for the original work goes to
+> [AXIVO](https://github.com/axivo).
+
 ## What you get
 
 | Layer | Components |

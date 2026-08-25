@@ -8,6 +8,10 @@
 外部 Ceph CSI、明文优先的密码管理，以及云环境底层支持（OpenStack、代理、
 Registry 镜像加速）。
 
+> **说明：** 本项目 Fork 自 [axivo/k3s-cluster](https://github.com/axivo/k3s-cluster)，
+> 在其基础上独立开发和维护。感谢原作者 [AXIVO](https://github.com/axivo)
+> 提供的优秀基础框架。
+
 ## 功能一览
 
 | 层次 | 组件 |
