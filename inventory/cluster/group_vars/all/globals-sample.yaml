@@ -282,7 +282,7 @@ enable_metrics_server: true
 # Observability - VictoriaLogs
 ###################
 # Full guide (default behaviour, storage presets, HA, troubleshooting):
-#   docs/VICTORIA-METRICS.md
+#   docs/victoria-metrics.md
 
 enable_victoria_logs: true
 
@@ -318,7 +318,7 @@ enable_victoria_logs: true
 # Observability - VictoriaMetrics + Grafana + AlertManager
 ###################
 # Full guide (default behaviour, storage presets, HA, troubleshooting):
-#   docs/VICTORIA-METRICS.md
+#   docs/victoria-metrics.md
 
 enable_victoria_metrics: true
 # notice: in here, VM not means VitualMachines, it means VictoriaMetrics.

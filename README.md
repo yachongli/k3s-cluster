@@ -46,10 +46,14 @@ component is toggled by a single `enable_<component>: true|false` in
 │       └── passwords.yaml       # Vault-encrypted fallback (Git-safe)
 ├── roles/                       # 18 roles, all share the same layout
 └── docs/
-    ├── ARCHITECTURE.md   /  架构设计.md
-    ├── CONFIGURATION.md  /  配置指南.md
-    ├── OPENSTACK.md
-    └── VICTORIA-METRICS.md
+    ├── architecture.md            /  architecture.zh-CN.md
+    ├── configuration.md           /  configuration.zh-CN.md
+    ├── globals-overrides.md
+    ├── kubelet-numa-research.md
+    ├── kubelet-tuning.md
+    ├── longhorn-storage.md
+    ├── openstack.md
+    └── victoria-metrics.md
 ```
 
 ## Prerequisites
@@ -334,7 +338,7 @@ cilium_tunnel_protocol: "vxlan"         # or "geneve"
 
 ### OpenStack / cloud with port security
 
-Three gotchas — full walkthrough in [docs/OPENSTACK.md](docs/OPENSTACK.md):
+Three gotchas — full walkthrough in [docs/openstack.md](docs/openstack.md):
 
 1. `cilium_non_masquerade_cidrs` must contain **only** Pod + Service CIDRs.
    Adding the node network leaks Pod IPs to the physical NIC → Neutron drops as spoofed.
@@ -375,13 +379,16 @@ cluster_pod_resources:
 
 ## Documentation
 
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — why the three layers, derived defaults, CNI coexistence
-- [docs/CONFIGURATION.md](docs/CONFIGURATION.md) — every override, common scenarios
-- [docs/GLOBALS.md](docs/GLOBALS.md) — globals.yaml deep dive: resolution order, component switches, version overrides, FAQ（中文）
-- [docs/OPENSTACK.md](docs/OPENSTACK.md) — OpenStack / spoofing-protected underlays
-- [docs/VICTORIA-METRICS.md](docs/VICTORIA-METRICS.md) — VictoriaMetrics / VictoriaLogs storage presets, pinning, HA
-- [docs/架构设计.md](docs/架构设计.md) — 设计说明（中文）
-- [docs/配置指南.md](docs/配置指南.md) — 配置指南（中文）
+- [docs/architecture.md](docs/architecture.md) — why the three layers, derived defaults, CNI coexistence
+- [docs/configuration.md](docs/configuration.md) — every override, common scenarios
+- [docs/globals-overrides.md](docs/globals-overrides.md) — globals.yaml deep dive: resolution order, component switches, version overrides, FAQ（中文）
+- [docs/kubelet-numa-research.md](docs/kubelet-numa-research.md) — kubelet topology-manager internals, GPU NUMA alignment fix, KubeVirt NUMA mapping（中文）
+- [docs/kubelet-tuning.md](docs/kubelet-tuning.md) — node-group kubelet presets, precheck, node role switching（中文）
+- [docs/longhorn-storage.md](docs/longhorn-storage.md) — Longhorn storage internals, replica placement, backup（中文）
+- [docs/openstack.md](docs/openstack.md) — OpenStack / spoofing-protected underlays
+- [docs/victoria-metrics.md](docs/victoria-metrics.md) — VictoriaMetrics / VictoriaLogs storage presets, pinning, HA
+- [docs/architecture.zh-CN.md](docs/architecture.zh-CN.md) — 设计说明（中文）
+- [docs/configuration.zh-CN.md](docs/configuration.zh-CN.md) — 配置指南（中文）
 
 ## Credits
 

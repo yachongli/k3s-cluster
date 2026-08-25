@@ -45,10 +45,14 @@ Registry 镜像加速）。
 │       └── passwords.yaml       # Vault 加密备份（可入 Git）
 ├── roles/                       # 18 个角色，目录结构统一
 └── docs/
-    ├── ARCHITECTURE.md   /  架构设计.md
-    ├── CONFIGURATION.md  /  配置指南.md
-    ├── OPENSTACK.md
-    └── VICTORIA-METRICS.md
+    ├── architecture.md           /  architecture.zh-CN.md
+    ├── configuration.md          /  configuration.zh-CN.md
+    ├── globals-overrides.md
+    ├── kubelet-numa-research.md
+    ├── kubelet-tuning.md
+    ├── longhorn-storage.md
+    ├── openstack.md
+    └── victoria-metrics.md
 ```
 
 ## 环境要求
@@ -333,7 +337,7 @@ cilium_tunnel_protocol: "vxlan"         # 或 "geneve"
 
 ### OpenStack / 启用端口安全的云环境
 
-三个必坑，详解见 [docs/OPENSTACK.md](docs/OPENSTACK.md)：
+三个必坑，详解见 [docs/openstack.md](docs/openstack.md)：
 
 1. `cilium_non_masquerade_cidrs` **只能**包含 Pod + Service CIDR。
    加入节点网段会让 Pod IP 泄漏到物理网卡，被 Neutron 判为伪造帧丢弃。
@@ -374,13 +378,16 @@ cluster_pod_resources:
 
 ## 文档
 
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) —— 三层结构、派生默认值、CNI 共存机制（英文）
-- [docs/CONFIGURATION.md](docs/CONFIGURATION.md) —— 全部覆盖项与常见场景（英文）
-- [docs/GLOBALS.md](docs/GLOBALS.md) —— globals.yaml 覆盖机制：变量解析顺序、组件开关、版本覆盖、FAQ
-- [docs/OPENSTACK.md](docs/OPENSTACK.md) —— OpenStack / 端口安全底层
-- [docs/VICTORIA-METRICS.md](docs/VICTORIA-METRICS.md) —— VictoriaMetrics / VictoriaLogs 存储选项、节点固定、HA
-- [docs/架构设计.md](docs/架构设计.md) —— 设计说明（中文）
-- [docs/配置指南.md](docs/配置指南.md) —— 配置指南（中文）
+- [docs/architecture.md](docs/architecture.md) —— 三层结构、派生默认值、CNI 共存机制（英文）
+- [docs/configuration.md](docs/configuration.md) —— 全部覆盖项与常见场景（英文）
+- [docs/globals-overrides.md](docs/globals-overrides.md) —— globals.yaml 覆盖机制：变量解析顺序、组件开关、版本覆盖、FAQ
+- [docs/kubelet-numa-research.md](docs/kubelet-numa-research.md) —— kubelet topology-manager 源码分析、GPU NUMA 对齐修复、KubeVirt 虚拟机 NUMA 映射
+- [docs/kubelet-tuning.md](docs/kubelet-tuning.md) —— 节点组 kubelet 预设、precheck、角色切换
+- [docs/longhorn-storage.md](docs/longhorn-storage.md) —— Longhorn 存储原理、副本放置、备份
+- [docs/openstack.md](docs/openstack.md) —— OpenStack / 端口安全底层
+- [docs/victoria-metrics.md](docs/victoria-metrics.md) —— VictoriaMetrics / VictoriaLogs 存储选项、节点固定、HA
+- [docs/architecture.zh-CN.md](docs/architecture.zh-CN.md) —— 设计说明（中文）
+- [docs/configuration.zh-CN.md](docs/configuration.zh-CN.md) —— 配置指南（中文）
 
 ## 致谢
 

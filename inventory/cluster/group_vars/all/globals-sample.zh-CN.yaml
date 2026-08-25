@@ -276,7 +276,7 @@ enable_metrics_server: true
 ###################
 # 可观测性 - VictoriaLogs
 ###################
-# 完整说明（默认行为、存储选型、HA、故障排查）：docs/VICTORIA-METRICS.md
+# 完整说明（默认行为、存储选型、HA、故障排查）：docs/victoria-metrics.md
 
 enable_victoria_logs: true
 
@@ -308,7 +308,7 @@ enable_victoria_logs: true
 ###################
 # 可观测性 - VictoriaMetrics + Grafana + AlertManager
 ###################
-# 完整说明（默认行为、存储选型、HA、故障排查）：docs/VICTORIA-METRICS.md
+# 完整说明（默认行为、存储选型、HA、故障排查）：docs/victoria-metrics.md
 
 enable_victoria_metrics: true
 # 注意，这里的VM不是虚拟机的缩写，而是 VictoriaMetrics 的简称。
