@@ -15,7 +15,7 @@ VictoriaMetrics / VictoriaLogs 如何使用它。
 > | **存储副本** | `longhorn_replica_count` | 磁盘数据的物理冗余 | `2` | Longhorn |
 > | **应用副本** | `victoria_metrics_cluster_enabled` | VM 进程的横向扩展 | `false` | VM chart |
 >
-> 本文只讨论**存储副本**。应用层 HA 见 [VICTORIA-METRICS.md](./VICTORIA-METRICS.md)。
+> 本文只讨论**存储副本**。应用层 HA 见 [victoria-metrics.md](./victoria-metrics.md)。
 
 ---
 

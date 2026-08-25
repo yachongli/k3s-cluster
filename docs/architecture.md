@@ -1,7 +1,7 @@
 # Architecture & Design Rationale
 
 This document explains **why** the k3s-cluster fork is designed the way it is.
-For **how to configure** your cluster, see [CONFIGURATION.md](./CONFIGURATION.md).
+For **how to configure** your cluster, see [configuration.md](./configuration.md).
 
 ## Overview
 

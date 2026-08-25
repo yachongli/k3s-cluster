@@ -515,7 +515,7 @@ local-path 只适用于以下情况：
 
 ### 换到外部 Ceph
 
-前提：`enable_ceph_csi: true`，且 `ceph_csi_monitors` / `credential_ceph_admin_key` 已配好（见 [docs/CONFIGURATION.md](CONFIGURATION.md) 中 Ceph CSI 节）。
+前提：`enable_ceph_csi: true`，且 `ceph_csi_monitors` / `credential_ceph_admin_key` 已配好（见 [README 的"对接外部 Ceph"一节](../README.zh-CN.md#对接外部-ceph)）。
 
 ```yaml
 enable_longhorn: false                           # 可选，也可以两者共存

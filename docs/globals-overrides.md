@@ -3,8 +3,8 @@
 `globals.yaml` 是本仓库**唯一需要日常修改的配置文件**。本文档深入说明它的
 定位、变量解析机制、可覆盖项清单，以及修改后应该运行哪个 playbook。
 
-- 快速上手与常见场景：[配置指南](./配置指南.md)
-- 设计原由（为何用扁平变量而非嵌套覆盖）：[架构设计](./架构设计.md)
+- 快速上手与常见场景：[配置指南](./configuration.zh-CN.md)
+- 设计原由（为何用扁平变量而非嵌套覆盖）：[架构设计](./architecture.zh-CN.md)
 
 ## 1. 定位
 
@@ -222,7 +222,7 @@ kubevirt_kubelet_override_host:
 
 > kubelet 策略变更前会自动 precheck：若节点上有运行中的 KubeVirt VM
 > 且策略在 `static`/`none` 间切换，会直接失败避免杀掉 VM。
-> 详解见 [KUBELET-TUNING.md](./KUBELET-TUNING.md)。
+> 详解见 [kubelet-tuning.md](./kubelet-tuning.md)。
 
 ## 10. Pod 资源档位
 

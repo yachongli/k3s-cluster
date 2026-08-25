@@ -1,7 +1,7 @@
 # Configuration Guide
 
 This document explains **how to configure** your k3s-cluster deployment.
-For design rationale, see [ARCHITECTURE.md](./ARCHITECTURE.md).
+For design rationale, see [architecture.md](./architecture.md).
 
 ## File layout
 
